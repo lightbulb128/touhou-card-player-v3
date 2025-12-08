@@ -15,6 +15,7 @@ type GlobalData = {
     characterConfigs: CharacterConfigMap;
     musicSelection: MusicSelectionMap;
     sources: MusicSourceMap;
+    cardSourcePrefix: string;
 };
 
 export type {
