@@ -12,16 +12,15 @@ enum CardBackgroundState {
 }
 
 export interface CharacterCardProps {
-    data: GlobalData;
-    characterId: CharacterId;
-    cardSelection: number;
+    imageSource: string;
     backgroundState: CardBackgroundState;
     raiseOnHover?: boolean;
     raiseDirection?: "up" | "down";
 }
 
 export default function CharacterCard({
-    data, characterId, backgroundState, cardSelection, raiseOnHover, raiseDirection
+    imageSource,
+    backgroundState, raiseOnHover, raiseDirection
 }: CharacterCardProps) {
     if (raiseOnHover === undefined) {
         raiseOnHover = false;
@@ -29,16 +28,8 @@ export default function CharacterCard({
     if (raiseDirection === undefined) {
         raiseDirection = "up";
     }
-    const isPlaceholder: boolean = backgroundState === CardBackgroundState.Placeholder || characterId === "";
-    const characterConfig = isPlaceholder ? null : data.characterConfigs.get(characterId);
-    let cardIds = characterConfig?.card;
-    let cardId = "";
-    if (Array.isArray(cardIds)) {
-        cardId = cardIds[cardSelection % cardIds.length];
-    } else if (typeof cardIds === "string") {
-        cardId = cardIds;
-    }
-    const cardSource = isPlaceholder ? "" : `${data.cardSourcePrefix}/${cardId}.webp`;
+    const isPlaceholder: boolean = backgroundState === CardBackgroundState.Placeholder || imageSource === "";
+    const cardSource = isPlaceholder ? "" : imageSource;
     let backgroundColor = "transparent";
     if (!isPlaceholder) {
         switch (backgroundState) {

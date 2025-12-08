@@ -1,65 +1,272 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+import PlayerTab from "./components/PlayerTab";
+import { CharacterConfig, CharacterId, GlobalData, MusicSelectionMap, Playback } from "./types/Configs";
+import { Box, Button, CssBaseline, Paper, Stack, Tab, Tabs } from "@mui/material";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
+import CreateTheme from "./components/Theme";
+import CustomTabs from "./components/CustomTabs";
+
+function TabContainer({
+  children
+}: {
+  children: React.ReactNode;
+}) {
+  return <Box
+    sx={{ width: "100%", paddingLeft: 2, paddingRight: 2 }}
+  >
+    <Paper
+      sx={{ padding: 2, width: "100%", boxSizing: "border-box" }}
+    >
+      {children}
+    </Paper>
+  </Box>
+}
+
+function createPlayingOrder(
+  globalData: GlobalData,
+  temporaryDisabled: Map<CharacterId, boolean>,
+  randomize: boolean
+): Array<CharacterId> {
+  const characterIds = Array.from(globalData.characterConfigs.keys());
+  let filteredIds = characterIds.filter((charId) => {
+    return !temporaryDisabled.get(charId);
+  });
+
+  if (randomize) {
+    // Shuffle the array
+    for (let i = filteredIds.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [filteredIds[i], filteredIds[j]] = [filteredIds[j], filteredIds[i]];
+    }
+  }
+  
+  return filteredIds;
+}
 
 export default function Home() {
+
+  const theme = CreateTheme();
+
+  type TabKey = "Player" | "Configs" | "Focus" | "Practice" | "Match";
+  const allTabs = ["Player", "Configs", "Focus", "Practice", "Match"] as const;
+
+  // refs
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+
+  // states
+  const [globalData, setGlobalData] = useState<GlobalData>(new GlobalData());
+  const [activeTab, setActiveTab] = useState<number>(0);
+  const [playback, setPlayback] = useState<Playback>(new Playback());
+  const [musicSelection, setMusicSelection] = useState<MusicSelectionMap>(new Map());
+  const [currentCharacterId, setCurrentCharacterId] = useState<CharacterId>("");
+  const [characterTemporaryDisabled, setCharacterTemporaryDisabled] = useState<Map<CharacterId, boolean>>(new Map());
+  const [playingOrder, setPlayingOrder] = useState<Array<CharacterId>>([]);
+
+  // region utility funcs
+  const getMusicSourceUrl = (character: CharacterId): string | null => {
+    const selection = musicSelection.get(character);
+    if (selection === undefined || selection === -1) {
+      return null;
+    }
+    const characterConfig = globalData.characterConfigs.get(character);
+    if (!characterConfig) {
+      return null;
+    }
+    const musicList = characterConfig.musics;
+    if (selection < 0 || selection >= musicList.length) {
+      return null;
+    }
+    const musicId = musicList[selection];
+    const sourceUrl = globalData.sources.get(musicId);
+    return sourceUrl || null;
+  }
+
+  // region effects
+  // fetch data
+  useEffect(() => {
+    const load = async () => {
+      const fetchJson = async (path: string) => {
+        const resp = await fetch(path);
+        return resp.json();
+      };
+
+      const [characters, sources, presets] = await Promise.all([
+        fetchJson("/character.json"),
+        fetchJson("/sources.json"),
+        fetchJson("/idpresets.json"),
+      ]);
+
+      setGlobalData((original) => { 
+        original.applyFetchedCharacters(characters); 
+        original.applyFetchedSources(sources);
+        original.applyFetchedPresets(presets);
+        return {...original} as GlobalData;
+      });
+
+      // set music selection to 0 for all characters
+      const initialSelection: MusicSelectionMap = new Map();
+      for (const charId in characters) {
+        initialSelection.set(charId, 0);
+      }
+      setMusicSelection(initialSelection);
+
+      // create playing order
+      const order = createPlayingOrder(globalData, characterTemporaryDisabled, false);
+      setPlayingOrder(order);
+
+      // set current character to the first one
+      setCurrentCharacterId(order.length > 0 ? order[0] : "");
+    };
+
+    load().catch((err) => {
+      console.error("Failed to load public data", err);
+    });
+  }, []);
+
+  // update audio source when currentCharacterId or musicSelection changes
+  useEffect(() => {
+    if (currentCharacterId === "") {
+      return;
+    }
+    const sourceUrl = getMusicSourceUrl(currentCharacterId);
+    if (audioElementRef.current) {
+      if (sourceUrl) {
+        audioElementRef.current.src = sourceUrl;
+        audioElementRef.current.load();
+      } else {
+        audioElementRef.current.src = "";
+      }
+    }
+  }, [currentCharacterId, musicSelection]);
+
+  // region handlers
+
+  const handlePlay = () => {
+    if (audioElementRef.current) {
+      audioElementRef.current.play();
+      setPlayback((original) => {
+        original.isPlaying = true;
+        return original;
+      });
+    }
+  };
+
+  const handlePause = () => {
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+      setPlayback((original) => {
+        original.isPlaying = false;
+        return original;
+      });
+    }
+  }
+
+  const handleAudioLoadedData = () => {
+    // Auto play when data is loaded
+    if (playback.isPlaying && audioElementRef.current) {
+      audioElementRef.current.play();
+    }
+  }
+
+  const handleNextMusic = () => {
+    // find next whose (1) selection is not -1 (2) not temporarily disabled
+    let currentIndex = playingOrder.indexOf(currentCharacterId);
+    const totalCharacters = playingOrder.length;
+    for (let offset = 1; offset <= totalCharacters; offset++) {
+      const nextIndex = (currentIndex + offset) % totalCharacters;
+      const nextCharId = playingOrder[nextIndex];
+      const selection = musicSelection.get(nextCharId);
+      const isDisabled = characterTemporaryDisabled.get(nextCharId);
+      if (selection !== undefined && selection !== -1 && !isDisabled) {
+        setCurrentCharacterId(nextCharId);
+        break;
+      }
+    }
+  }
+
+  const handlePreviousMusic = () => {
+    // find previous whose (1) selection is not -1 (2) not temporarily disabled
+    let currentIndex = playingOrder.indexOf(currentCharacterId);
+    const totalCharacters = playingOrder.length;
+    for (let offset = 1; offset <= totalCharacters; offset++) {
+      const prevIndex = (currentIndex - offset + totalCharacters) % totalCharacters;
+      const prevCharId = playingOrder[prevIndex];
+      const selection = musicSelection.get(prevCharId);
+      const isDisabled = characterTemporaryDisabled.get(prevCharId);
+      if (selection !== undefined && selection !== -1 && !isDisabled) {
+        setCurrentCharacterId(prevCharId);
+        break;
+      }
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <div style={{display: "none"}}>
+        <audio id="audio-element" ref={audioElementRef}
+          onLoadedData={handleAudioLoadedData}
+          onLoadedMetadata={
+            () => {
+              // set playback.duration
+              if (audioElementRef.current) {
+                setPlayback({...playback, duration: audioElementRef.current!.duration});
+              }
+            }
+          }
+          onTimeUpdate={
+            () => {
+              // set playback.currentTime
+              console.log("Time update:", audioElementRef.current!.currentTime);
+              if (audioElementRef.current) {
+                setPlayback({
+                  ...playback,
+                  currentTime: audioElementRef.current!.currentTime,
+                });
+              }
+            }
+          }
+        ></audio>
+      </div>
+      <div><main><Box sx={{ width: "100%" }}>
+        <Stack direction="column" spacing={2} sx={{
+          width: "100%", alignItems: "center", paddingTop: 2
+        }}>
+          <Stack direction="row" spacing={2}>
+            {/* Use buttons with onClick handlers to switch tabs */}
+            {allTabs.map((tabName, index) => (
+              <Button
+                key={tabName}
+                variant={activeTab === index ? "contained" : "outlined"}
+                onClick={() => setActiveTab(index)}
+              >
+                {tabName}
+              </Button>
+            ))}
+          </Stack>
+          <CustomTabs activeTab={activeTab} onChange={setActiveTab} innerTabs={[
+            <TabContainer>
+              <PlayerTab
+                data={globalData}
+                currentCharacterId={currentCharacterId as CharacterId}
+                playback={playback}
+                setPlayback={setPlayback}
+                onPreviousMusic={handlePreviousMusic}
+                onNextMusic={handleNextMusic}
+                onPlay={handlePlay}
+                onPause={handlePause}
+              ></PlayerTab>
+            </TabContainer>,
+            <TabContainer>Configs</TabContainer>,
+            <TabContainer>Alice is best</TabContainer>,
+            <TabContainer>Practice</TabContainer>,
+            <TabContainer>Match</TabContainer>
+          ]}>
+          </CustomTabs>
+        </Stack>
+      </Box></main></div>
+    </ThemeProvider>
   );
 }

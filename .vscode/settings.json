@@ -1,3 +1,4 @@
 {
-    "editor.fontFamily": "Palatino Linotype"
+    "editor.fontFamily": "Source Code Pro",
+    "editor.tabSize": 2
 }
