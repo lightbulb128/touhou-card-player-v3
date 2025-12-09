@@ -5,6 +5,7 @@ import { CharacterId, getMusicInfoFromCharacterId, GlobalData, MusicSelectionMap
 import PlayerControl from "./PlayerControl";
 import MusicCardDisplay from "./MusicCardDisplay";
 import { CardBackgroundState, CharacterCard } from "./CharacterCard";
+import { useState } from "react";
 
 
 export interface PlayerTabProps {
@@ -13,7 +14,9 @@ export interface PlayerTabProps {
   currentCharacterId: CharacterId;
   playback: Playback;
   playingOrder: Array<CharacterId>;
+  characterTemporaryDisabled: Map<CharacterId, boolean>;
   setPlayback: (playback: Playback) => void;
+  setCharacterTemporaryDisabled: (map: Map<CharacterId, boolean>) => void;
   onNextMusic: () => void;
   onPreviousMusic: () => void;
   onPlay(): void;
@@ -23,8 +26,11 @@ export interface PlayerTabProps {
 export default function PlayerTab({
   data, currentCharacterId, playback, setPlayback, playingOrder,
   musicSelection,
-  onNextMusic, onPreviousMusic, onPlay, onPause
+  onNextMusic, onPreviousMusic, onPlay, onPause,
+  characterTemporaryDisabled, setCharacterTemporaryDisabled,
 }: PlayerTabProps) {
+
+  const [hoveringCharacterId, setHoveringCharacterId] = useState<CharacterId | null>(null);
   
   let currentIndex = playingOrder.indexOf(currentCharacterId);
   if (currentIndex === -1) {
@@ -66,12 +72,25 @@ export default function PlayerTab({
     playingOrder.forEach((characterId, index) => {
       const cards = data.characterConfigs.get(characterId)?.card || [placeholderCardSource];
       const cardCount = cards.length;
+      let background = CardBackgroundState.Normal;
+      if (characterId === hoveringCharacterId) {
+        if (characterTemporaryDisabled.get(characterId)) {
+          background = CardBackgroundState.DisabledHover;
+        } else {
+          background = CardBackgroundState.Hover;
+        }
+      } else {
+        if (characterTemporaryDisabled.get(characterId)) {
+          background = CardBackgroundState.Disabled;
+        } else {
+          background = CardBackgroundState.Normal;
+        }
+      }
       cards.forEach((cardSource, cardIndex) => {
         const element = <CharacterCard
           key={`${characterId}-card-${cardIndex}`}
           imageSource={cardSource}
-          backgroundState={CardBackgroundState.Normal}
-          raised={false}
+          backgroundState={background}
           width={`${singleCardWp}%`}
           sx={{
             position: "absolute",
@@ -79,6 +98,9 @@ export default function PlayerTab({
             transition: "left 0.5s ease-in-out",
             zIndex: totalCards - counter,
           }}
+          raised={characterId === hoveringCharacterId}
+          onMouseEnter={() => setHoveringCharacterId(characterId)}
+          onMouseLeave={() => setHoveringCharacterId(null)}
         />
         counter += 1;
         upcomingCards.push(element);

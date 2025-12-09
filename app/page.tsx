@@ -279,9 +279,11 @@ export default function Home() {
                 data={globalData}
                 playingOrder={playingOrder}
                 musicSelection={musicSelection}
+                characterTemporaryDisabled={characterTemporaryDisabled}
                 currentCharacterId={currentCharacterId as CharacterId}
                 playback={playback}
                 setPlayback={setPlayback}
+                setCharacterTemporaryDisabled={setCharacterTemporaryDisabled}
                 onPreviousMusic={handlePreviousMusic}
                 onNextMusic={handleNextMusic}
                 onPlay={handlePlay}

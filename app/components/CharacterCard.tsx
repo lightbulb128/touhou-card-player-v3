@@ -24,12 +24,14 @@ export interface CharacterCardProps {
 	sx?: object;
 	aspectRatio?: number;
 	width: string;
+	[key: string]: any;
 }
 
 export function CharacterCard({
 	imageSource,
 	backgroundState, raised, raiseDirection,
-	onClick, sx, aspectRatio, width
+	onClick, sx, aspectRatio, width,
+	...props
 }: CharacterCardProps) {
 	if (raised === undefined) {
 		raised = false;
@@ -50,6 +52,7 @@ export function CharacterCard({
 				break;
 			case CardBackgroundState.Hover:
 				backgroundColor = "#b3f9ffff";
+				break;
 			case CardBackgroundState.Disabled:
 				backgroundColor = "#d3d3d3ff";
 				break;
@@ -69,18 +72,19 @@ export function CharacterCard({
 	}
 	const isGrayscale = backgroundState === CardBackgroundState.Disabled || backgroundState === CardBackgroundState.DisabledHover;
 	const borderStyle = isPlaceholder ? "2px dashed gray" : "none";
-	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-10px)" : "translateY(10px)") : "none";
+	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-10px)" : "translateY(10px)") : "translateY(0px)";
 	return (
 		<Paper elevation={3} sx={{
-			width: width,
-			backgroundColor: backgroundColor,
-			border: borderStyle,
-			filter: isGrayscale ? "grayscale(100%)" : "none",
-			transition: "transform 0.3s ease",
-			transform: raiseTransform,
-			...sx
-		}}
+				...sx,
+				width: width,
+				backgroundColor: backgroundColor,
+				border: borderStyle,
+				filter: isGrayscale ? "grayscale(100%)" : "none",
+				transition: "transform 0.3s ease, background-color 0.3s ease, filter 0.3s ease",
+				transform: raiseTransform
+			}}
 			onClick={onClick ? () => onClick() : undefined}
+			{...props}
 		>
 			<Box sx={{
 				width: "100%",
