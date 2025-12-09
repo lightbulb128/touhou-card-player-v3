@@ -2,11 +2,11 @@ import { createTheme } from "@mui/material/styles";
 import localFont from "next/font/local"
 
 const inconsolata = localFont({ 
-  src: "../../public/Inconsolata-VF.ttf", 
-  variable: "--font-inconsolata" 
+  src: "../fonts/Inconsolata-Medium.ttf", 
+  variable: "--font-inconsolata"
 });
 const yugothicb = localFont({ 
-  src: "../../public/YuGothB.ttc", 
+  src: "../fonts/YuGothic-Bold-01.ttf", 
   variable: "--font-yu-gothic-bold"
 });
 
@@ -37,8 +37,8 @@ export default function CreateTheme() {
     },
     // shape: { borderRadius: 14 },
     typography: {
-      fontFamily: "--font-inconsolata, --font-yu-gothic-bold, Arial, sans-serif",
-      button: { textTransform: "none", fontWeight: 600 },
+      fontFamily: `${inconsolata.style.fontFamily}, ${yugothicb.style.fontFamily}, sans-serif`,
+      button: { textTransform: "none" },      
     }
   });
 }

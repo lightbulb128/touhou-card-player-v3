@@ -13,6 +13,7 @@ import { Box, Button, CssBaseline, Paper, Stack, Tab, Tabs } from "@mui/material
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CreateTheme from "./components/Theme";
 import CustomTabs from "./components/CustomTabs";
+import ListTab from "./components/ListTab";
 
 function TabContainer({
   children
@@ -33,16 +34,6 @@ function TabContainer({
 export default function Home() {
 
   const theme = CreateTheme();
-
-  type TabKey = "Player" | "Configs" | "Focus" | "Practice" | "Match";
-  const allTabs = ["Player", "Configs", "Focus", "Practice", "Match"] as const;
-  const tabNames = {
-    "Player": "Play",
-    "Configs": "Conf",
-    "Focus": "Focu",
-    "Practice": "Prac",
-    "Match": "Matc"
-  }
 
   // refs
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
@@ -285,6 +276,19 @@ export default function Home() {
     }
   }
 
+  // region render
+  const tabButton = (id: number, name: string) => {
+    return (
+      <Button
+        key={name}
+        variant={activeTab === id ? "contained" : "outlined"}
+        onClick={() => setActiveTab(id)}
+      >
+        {name}
+      </Button>
+    );
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -321,16 +325,11 @@ export default function Home() {
           width: "100%", alignItems: "center", paddingTop: 2
         }}>
           <Stack direction="row" spacing={2}>
-            {/* Use buttons with onClick handlers to switch tabs */}
-            {allTabs.map((tabName, index) => (
-              <Button
-                key={tabName}
-                variant={activeTab === index ? "contained" : "outlined"}
-                onClick={() => setActiveTab(index)}
-              >
-                {tabNames[tabName as TabKey]}
-              </Button>
-            ))}
+            {tabButton(0, "Player")}
+            {tabButton(1, "List")}
+            {tabButton(2, "Configs")}
+            {tabButton(3, "Practice")}
+            {tabButton(4, "Match")}
           </Stack>
           <CustomTabs activeTab={activeTab} onChange={setActiveTab} innerTabs={[
             <TabContainer>
@@ -355,6 +354,26 @@ export default function Home() {
                 onPlay={handlePlay}
                 onPause={handlePause}
               ></PlayerTab>
+            </TabContainer>,
+            <TabContainer>
+              <ListTab
+                data={globalData}
+                musicSelection={musicSelection}
+                characterTemporaryDisabled={characterTemporaryDisabled}
+                currentCharacterId={currentCharacterId as CharacterId}
+                playingOrder={playingOrder}
+                setCurrentCharacterId={setCurrentCharacterId}
+                setCharacterTemporaryDisabled={setCharacterTemporaryDisabled}
+                playback={playback}
+                playbackState={playbackState}
+                setPlayback={setPlayback}
+                setPlaybackState={setPlaybackState}
+                setPlaybackTime={setPlaybackTime}
+                onNextMusic={handleNextMusic}
+                onPreviousMusic={handlePreviousMusic}
+                onPlay={handlePlay}
+                onPause={handlePause}
+              ></ListTab>
             </TabContainer>,
             <TabContainer>Configs</TabContainer>,
             <TabContainer>Alice is best</TabContainer>,
