@@ -1,7 +1,7 @@
 "use client";
 
-import { Box, Grid, Stack, Typography } from "@mui/material";
-import { CharacterId, getMusicInfoFromCharacterId, GlobalData, MusicSelectionMap, Playback } from "../types/Configs";
+import { Box, Button, Grid, Stack, TextField, Typography } from "@mui/material";
+import { CharacterId, createPlayingOrder, getMusicInfoFromCharacterId, GlobalData, MusicSelectionMap, Playback, PlaybackSetting } from "../types/Configs";
 import PlayerControl from "./PlayerControl";
 import MusicCardDisplay from "./MusicCardDisplay";
 import { CardBackgroundState, CharacterCard } from "./CharacterCard";
@@ -15,8 +15,13 @@ export interface PlayerTabProps {
   playback: Playback;
   playingOrder: Array<CharacterId>;
   characterTemporaryDisabled: Map<CharacterId, boolean>;
+  playbackSetting: PlaybackSetting;
   setPlayback: (playback: Playback) => void;
   setCharacterTemporaryDisabled: (map: Map<CharacterId, boolean>) => void;
+  setPlayingOrder: (order: Array<CharacterId>) => void;
+  setCurrentCharacterId: (characterId: CharacterId) => void;
+  setPlaybackSetting: (setting: PlaybackSetting) => void;
+  setPlaybackTime?: (time: number) => void;
   onNextMusic: () => void;
   onPreviousMusic: () => void;
   onPlay(): void;
@@ -25,12 +30,14 @@ export interface PlayerTabProps {
 
 export default function PlayerTab({
   data, currentCharacterId, playback, setPlayback, playingOrder,
-  musicSelection,
+  musicSelection, 
   onNextMusic, onPreviousMusic, onPlay, onPause,
-  characterTemporaryDisabled, setCharacterTemporaryDisabled,
+  characterTemporaryDisabled, setCharacterTemporaryDisabled, setPlayingOrder, setCurrentCharacterId,
+  playbackSetting, setPlaybackSetting, setPlaybackTime
 }: PlayerTabProps) {
 
   const [hoveringCharacterId, setHoveringCharacterId] = useState<CharacterId | null>(null);
+  const [playbackDurationString, setPlaybackDurationString] = useState<string>("0");
   
   let currentIndex = playingOrder.indexOf(currentCharacterId);
   if (currentIndex === -1) {
@@ -95,12 +102,18 @@ export default function PlayerTab({
           sx={{
             position: "absolute",
             left: `${accumulate}%`,
-            transition: "left 0.5s ease-in-out",
+            transition: "left 0.5s ease-in-out, transform 0.3s ease, background-color 0.3s ease, filter 0.3s ease",
             zIndex: totalCards - counter,
           }}
           raised={characterId === hoveringCharacterId}
           onMouseEnter={() => setHoveringCharacterId(characterId)}
           onMouseLeave={() => setHoveringCharacterId(null)}
+          onClick={() => {
+            const newMap = new Map(characterTemporaryDisabled);
+            const currentlyDisabled = newMap.get(characterId) || false;
+            newMap.set(characterId, !currentlyDisabled);
+            setCharacterTemporaryDisabled(newMap);
+          }}
         />
         counter += 1;
         upcomingCards.push(element);
@@ -114,6 +127,20 @@ export default function PlayerTab({
         accumulate += playedOffsetWp;
       }
     });
+  }
+
+  const regeneratePlayingOrder = (shuffle: boolean) => {
+    const newTemporaryDisabled = new Map<CharacterId, boolean>();
+    data.characterConfigs.forEach((_, characterId) => {
+      if (musicSelection.get(characterId) === -1) return;
+      newTemporaryDisabled.set(characterId, false);
+    });
+    const newPlayingOrder = createPlayingOrder(data, musicSelection, newTemporaryDisabled, shuffle);
+    const newCurrentCharacterId = newPlayingOrder[0];
+    setPlayingOrder(newPlayingOrder);
+    setCharacterTemporaryDisabled(newTemporaryDisabled);
+    setCurrentCharacterId(newCurrentCharacterId);
+    onPause();
   }
 
   return (
@@ -180,13 +207,14 @@ export default function PlayerTab({
           currentCharacterId={currentCharacterId}
           playback={playback}
           setPlayback={setPlayback}
+          setPlaybackTime={setPlaybackTime}
           onNextMusic={onNextMusic}
           onPreviousMusic={onPreviousMusic}
           onPlay={onPlay}
           onPause={onPause}
         ></PlayerControl>
-        <Stack direction="column" spacing={0} width="100%">
-          <Typography variant="body2" color="text.secondary">
+        <Stack direction="column" spacing={1} width="100%">
+          <Typography variant="body1" color="text.secondary">
             Upcoming
           </Typography>
           <Stack direction="row" spacing={0}
@@ -200,6 +228,58 @@ export default function PlayerTab({
             {upcomingCards}
           </Stack>
         </Stack>
+        <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
+          <Button variant="outlined" sx={{ width: "8rem" }} color="secondary" onClick={() => {
+            regeneratePlayingOrder(true);
+          }}>Shuffle</Button>
+          <Button variant="outlined" sx={{ width: "8rem" }} color="secondary" onClick={() => {
+            regeneratePlayingOrder(false);
+          }}>Sort</Button>
+        </Stack>
+        <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
+          <Button 
+            variant={playbackSetting.randomStartPosition ? "contained" : "outlined"}
+            sx={{ width: "8rem" }} 
+            onClick={() => {
+              setPlaybackSetting({
+                ...playbackSetting,
+                randomStartPosition: !playbackSetting.randomStartPosition,
+              });
+            }}
+          >Random start</Button>
+          <Button 
+            variant={playbackSetting.countdown ? "contained" : "outlined"}
+            sx={{ width: "8rem" }} 
+            onClick={() => {
+              setPlaybackSetting({
+                ...playbackSetting,
+                countdown: !playbackSetting.countdown,
+              });
+            }}
+          >Countdown</Button>
+        </Stack>
+        <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
+          <TextField
+            label="Playback Duration (seconds)"
+            value={playbackDurationString}
+            onChange={(e) => setPlaybackDurationString(e.target.value)}
+            sx={{ width: "16rem" }}
+            size="small"
+            type="number"
+            onBlur={() => {
+              let duration = parseInt(playbackDurationString);
+              if (isNaN(duration) || duration < 0) {
+                duration = 0;
+              }
+              setPlaybackDurationString(duration.toString());
+              setPlaybackSetting({
+                ...playbackSetting,
+                playbackDuration: duration,
+              });
+            }}
+          />
+        </Stack>
+
       </Stack>
     </div>
   )

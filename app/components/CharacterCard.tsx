@@ -2,7 +2,7 @@ import { Box, Paper, Stack, SxProps } from "@mui/material";
 import { CharacterId, GlobalData } from "../types/Configs";
 
 const CardAspectRatio = 703 / 1000;
-const CardSourcePrefix = "https://raw.githubusercontent.com/lightbulb128/touhou-card-player/refs/heads/master/public/cards-dairi/"
+const CardSourcePrefix = "https://r2bucket-touhou.hgjertkljw.org/cards/"
 
 export enum CardBackgroundState {
 	Placeholder,
@@ -57,7 +57,7 @@ export function CharacterCard({
 				backgroundColor = "#d3d3d3ff";
 				break;
 			case CardBackgroundState.DisabledHover:
-				backgroundColor = "#92b6beff";
+				backgroundColor = "#97ccd6ff";
 				break;
 			case CardBackgroundState.Selected:
 				backgroundColor = "#71d7ffff";
@@ -72,16 +72,16 @@ export function CharacterCard({
 	}
 	const isGrayscale = backgroundState === CardBackgroundState.Disabled || backgroundState === CardBackgroundState.DisabledHover;
 	const borderStyle = isPlaceholder ? "2px dashed gray" : "none";
-	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-10px)" : "translateY(10px)") : "translateY(0px)";
+	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-10%)" : "translateY(10%)") : "translateY(0px)";
 	return (
-		<Paper elevation={3} sx={{
-				...sx,
+		<Paper elevation={3} 
+			sx={{
 				width: width,
 				backgroundColor: backgroundColor,
 				border: borderStyle,
-				filter: isGrayscale ? "grayscale(100%)" : "none",
 				transition: "transform 0.3s ease, background-color 0.3s ease, filter 0.3s ease",
-				transform: raiseTransform
+				transform: raiseTransform,
+				...sx,
 			}}
 			onClick={onClick ? () => onClick() : undefined}
 			{...props}
@@ -106,6 +106,8 @@ export function CharacterCard({
 							height: 'auto',
 							objectFit: 'cover',
 							userSelect: 'none',
+							transition: 'filter 0.3s ease',
+							filter: isGrayscale ? 'grayscale(100%)' : 'none',
 						}}
 					/>
 				)}
@@ -120,7 +122,8 @@ export interface CharacterCardStackedProps {
 	raiseDirection?: "up" | "down";
 	backgroundState?: CardBackgroundState;
 	expanded?: boolean;
-	sx?: SxProps;
+	sx?: object;
+	stackSx?: SxProps;
 	boxSx?: SxProps;
 }
 
@@ -128,45 +131,50 @@ export function CharacterCardStacked({
 	imageSources,
 	raised, raiseDirection,
 	backgroundState, expanded, 
-	sx, boxSx
+	stackSx, boxSx, sx,
 }: CharacterCardStackedProps) {
 	if (backgroundState === undefined) { backgroundState = CardBackgroundState.Normal; }
 	if (expanded === undefined) { expanded = false; }
 	const cardCount = imageSources.length;
 	if (raised === undefined) { raised = false; }
 	if (raiseDirection === undefined) { raiseDirection = "up"; }
-	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-10px)" : "translateY(10px)") : "none";
+	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-1vw)" : "translateY(1vw)") : "none";
 	return (
-		<Stack 
-			direction="row" spacing={1} alignItems="center" justifyContent="center"
-			sx={{ 
-				...sx
-			}}
+		<Box
+			sx={{...sx}}
+			display="flex" alignItems="center" justifyContent="center"
 		>
-			{imageSources.map((source, index) => (
-				<Box
-					key={index}
-					sx={{
-						marginLeft: index === 0 ? "0%" : (expanded ? "2%" : "-20%") + " !important",
-						zIndex: cardCount - index,
-						transition: "margin-left 0.8s ease, transform 0.3s ease",
-						transitionDelay: "0.3s",
-						width: "100%",
-						transform: raiseTransform,
-						...boxSx
-					}}
-				>
-					<CharacterCard
+			<Stack 
+				direction="row" spacing={1} alignItems="center" justifyContent="center"
+				sx={{ 
+					...stackSx
+				}}
+			>
+				{imageSources.map((source, index) => (
+					<Box
 						key={index}
-						imageSource={source}
-						width="100%"
-						raised={false}
-						aspectRatio={CardAspectRatio}
-						backgroundState={backgroundState!}
-					/>
-				</Box>
-			))}
-		</Stack>
+						sx={{
+							marginLeft: index === 0 ? "0%" : (expanded ? "2%" : "-20%") + " !important",
+							zIndex: cardCount - index,
+							transition: "margin-left 0.3s ease, transform 0.3s ease",
+							transitionDelay: "0.3s",
+							width: "100%",
+							transform: raiseTransform,
+							...boxSx
+						}}
+					>
+						<CharacterCard
+							key={index}
+							imageSource={source}
+							width="100%"
+							raised={false}
+							aspectRatio={CardAspectRatio}
+							backgroundState={backgroundState!}
+						/>
+					</Box>
+				))}
+			</Stack>
+		</Box>
 	)
 	
 }

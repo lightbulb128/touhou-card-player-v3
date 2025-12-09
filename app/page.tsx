@@ -2,7 +2,13 @@
 
 import { useEffect, useState, useRef } from "react";
 import PlayerTab from "./components/PlayerTab";
-import { CharacterConfig, CharacterId, GlobalData, MusicInfo, MusicSelectionMap, MusicUniqueId, Playback } from "./types/Configs";
+import { 
+  CharacterConfig, CharacterId, 
+  createPlayingOrder, GlobalData, 
+  MusicInfo, MusicSelectionMap, 
+  MusicUniqueId, Playback, PlaybackSetting, 
+  PlaybackState 
+} from "./types/Configs";
 import { Box, Button, CssBaseline, Paper, Stack, Tab, Tabs } from "@mui/material";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CreateTheme from "./components/Theme";
@@ -24,28 +30,6 @@ function TabContainer({
   </Box>
 }
 
-function createPlayingOrder(
-  globalData: GlobalData,
-  musicSelection: MusicSelectionMap,
-  temporaryDisabled: Map<CharacterId, boolean>,
-  randomize: boolean
-): Array<CharacterId> {
-  const characterIds = Array.from(globalData.characterConfigs.keys());
-  let filteredIds = characterIds.filter((charId) => {
-    return musicSelection.get(charId) !== -1 && !temporaryDisabled.get(charId);
-  });
-
-  if (randomize) {
-    // Shuffle the array
-    for (let i = filteredIds.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [filteredIds[i], filteredIds[j]] = [filteredIds[j], filteredIds[i]];
-    }
-  }
-  
-  return filteredIds;
-}
-
 export default function Home() {
 
   const theme = CreateTheme();
@@ -62,6 +46,7 @@ export default function Home() {
 
   // refs
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const countdownAudioElementRef = useRef<HTMLAudioElement | null>(null);
 
   // states
   const [globalData, setGlobalData] = useState<GlobalData>(new GlobalData());
@@ -71,6 +56,10 @@ export default function Home() {
   const [currentCharacterId, setCurrentCharacterId] = useState<CharacterId>("");
   const [characterTemporaryDisabled, setCharacterTemporaryDisabled] = useState<Map<CharacterId, boolean>>(new Map());
   const [playingOrder, setPlayingOrder] = useState<Array<CharacterId>>([]);
+  const [playbackSetting, setPlaybackSetting] = useState<PlaybackSetting>({ 
+    countdown: false, randomStartPosition: false, playbackDuration: 0
+  })
+  const [pauseTimeoutHandle, setPauseTimeoutHandle] = useState<NodeJS.Timeout | null>(null);
 
   // region utility funcs
   const getMusicId = (character: CharacterId): MusicUniqueId | null => {
@@ -108,6 +97,26 @@ export default function Home() {
       ...getMusicInfo(musicName),
       characterId: character
     } as MusicInfo;
+  }
+
+  const setRandomPlaybackPosition = () => {
+    if (audioElementRef.current && playbackSetting.randomStartPosition) {
+      const duration = audioElementRef.current.duration;
+      const randomPosition = (duration < 10) ? 0 : Math.random() * (duration - 10);
+      audioElementRef.current.currentTime = randomPosition;
+      setPlayback((original) => {
+        return { ...original, currentTime: randomPosition };
+      });
+    }
+  }
+
+  const setPlaybackTime = (time: number) => {
+    if (audioElementRef.current) {
+      audioElementRef.current.currentTime = time;
+      setPlayback((original) => {
+        return { ...original, currentTime: time };
+      });
+    }
   }
 
   // region effects
@@ -152,7 +161,7 @@ export default function Home() {
     });
   }, []);
 
-  // update audio source when currentCharacterId or musicSelection changes
+  // update audio source when currentCharacterId
   useEffect(() => {
     if (currentCharacterId === "") {
       return;
@@ -165,35 +174,97 @@ export default function Home() {
       } else {
         audioElementRef.current.src = "";
       }
+      if (playbackSetting.countdown && (
+        playback.state === PlaybackState.Playing ||
+        playback.state === PlaybackState.TimeoutPause
+      )) {
+        // play countdown audio first
+        if (countdownAudioElementRef.current) {
+          countdownAudioElementRef.current.currentTime = 0;
+          countdownAudioElementRef.current.play();
+        }
+        setPlayback((original) => {
+          return {
+            ...original,
+            state: PlaybackState.CountingDown,
+          }
+        });
+      }
     }
-  }, [currentCharacterId, musicSelection]);
+  }, [currentCharacterId]);
 
   // region handlers
+
+  const resetPauseTimeout = () => {
+    if (pauseTimeoutHandle) {
+      clearTimeout(pauseTimeoutHandle);
+      setPauseTimeoutHandle(null);
+    }
+    if (playbackSetting.playbackDuration > 0) {
+      const timeoutHandle = setTimeout(() => {
+        if (audioElementRef.current) {
+          audioElementRef.current.pause();
+        }
+        console.log("Auto pausing playback due to timeout");
+        setPlayback((original => {
+          return {
+            ...original,
+            state: PlaybackState.TimeoutPause,
+          }
+        }));
+        setPauseTimeoutHandle(null);
+      }, playbackSetting.playbackDuration * 1000);
+      setPauseTimeoutHandle(timeoutHandle);
+    }
+  }
+
+  const handleCountdownEnded = () => {
+    if (audioElementRef.current) {
+      if (playbackSetting.randomStartPosition) {
+        setRandomPlaybackPosition();
+      }
+      audioElementRef.current.play();
+      resetPauseTimeout();
+      setPlayback((original) => {
+        original.state = PlaybackState.Playing;
+        return original;
+      });
+    }
+  }
 
   const handlePlay = () => {
     if (audioElementRef.current) {
       audioElementRef.current.play();
       setPlayback((original) => {
-        original.isPlaying = true;
-        return original;
+        return { ...original, state: PlaybackState.Playing };
       });
     }
   };
 
   const handlePause = () => {
+    if (pauseTimeoutHandle) {
+      clearTimeout(pauseTimeoutHandle);
+      setPauseTimeoutHandle(null);
+    }
     if (audioElementRef.current) {
       audioElementRef.current.pause();
       setPlayback((original) => {
-        original.isPlaying = false;
-        return original;
+        return { ...original, state: PlaybackState.Stopped };
       });
     }
   }
 
   const handleAudioLoadedData = () => {
     // Auto play when data is loaded
-    if (playback.isPlaying && audioElementRef.current) {
+    if ((
+      playback.state === PlaybackState.Playing || 
+      playback.state === PlaybackState.TimeoutPause
+    ) && audioElementRef.current) {
+      if (playbackSetting.randomStartPosition) {
+        setRandomPlaybackPosition();
+      }
       audioElementRef.current.play();
+      resetPauseTimeout();
     }
   }
 
@@ -246,7 +317,6 @@ export default function Home() {
           onTimeUpdate={
             () => {
               // set playback.currentTime
-              console.log("Time update:", audioElementRef.current!.currentTime);
               if (audioElementRef.current) {
                 setPlayback({
                   ...playback,
@@ -255,6 +325,10 @@ export default function Home() {
               }
             }
           }
+        ></audio>
+        <audio id="countdown-audio-element" ref={countdownAudioElementRef}
+          src="https://r2bucket-touhou.hgjertkljw.org/mp3/Bell3.mp3"
+          onEnded={handleCountdownEnded}
         ></audio>
       </div>
       <div><main><Box sx={{ width: "100%" }}>
@@ -282,8 +356,13 @@ export default function Home() {
                 characterTemporaryDisabled={characterTemporaryDisabled}
                 currentCharacterId={currentCharacterId as CharacterId}
                 playback={playback}
+                playbackSetting={playbackSetting}
                 setPlayback={setPlayback}
                 setCharacterTemporaryDisabled={setCharacterTemporaryDisabled}
+                setPlayingOrder={setPlayingOrder}
+                setCurrentCharacterId={setCurrentCharacterId}
+                setPlaybackSetting={setPlaybackSetting}
+                setPlaybackTime={setPlaybackTime}
                 onPreviousMusic={handlePreviousMusic}
                 onNextMusic={handleNextMusic}
                 onPlay={handlePlay}

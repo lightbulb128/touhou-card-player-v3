@@ -77,18 +77,29 @@ class GlobalData {
   }
 }
 
+enum PlaybackState {
+  Stopped,
+  Playing,
+  CountingDown,
+  TimeoutPause,
+}
+
 class Playback {
   currentTime: number;
   duration: number;
-  isPlaying: boolean;
-  isCountingDown: boolean;
+  state: PlaybackState;
 
   constructor() {
     this.currentTime = 0;
     this.duration = 0;
-    this.isPlaying = false;
-    this.isCountingDown = false;
+    this.state = PlaybackState.Stopped;
   }
+}
+
+type PlaybackSetting = {
+  countdown: boolean;
+  randomStartPosition: boolean;
+  playbackDuration: number;
 }
 
 function getMusicInfo(musicName: string): { title: string; album: string } {
@@ -144,6 +155,28 @@ function getMusicInfoFromCharacterId(globalData: GlobalData, musicSelection: Mus
   } as MusicInfo;
 }
 
+function createPlayingOrder(
+  globalData: GlobalData,
+  musicSelection: MusicSelectionMap,
+  temporaryDisabled: Map<CharacterId, boolean>,
+  randomize: boolean
+): Array<CharacterId> {
+  const characterIds = Array.from(globalData.characterConfigs.keys());
+  let filteredIds = characterIds.filter((charId) => {
+    return musicSelection.get(charId) !== -1 && !temporaryDisabled.get(charId);
+  });
+
+  if (randomize) {
+    // Shuffle the array
+    for (let i = filteredIds.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [filteredIds[i], filteredIds[j]] = [filteredIds[j], filteredIds[i]];
+    }
+  }
+  
+  return filteredIds;
+}
+
 export type {
   MusicUniqueId,
   CharacterId,
@@ -153,10 +186,11 @@ export type {
   CharacterConfigMap,
   MusicSelectionMap,
   MusicPresets,
-  MusicInfo
+  MusicInfo,
+  PlaybackSetting,
 };
 
 export { 
-  GlobalData , Playback, 
-  getMusicInfo, getMusicInfoFromCharacterId 
+  GlobalData , Playback, PlaybackState,
+  getMusicInfo, getMusicInfoFromCharacterId, createPlayingOrder
 };

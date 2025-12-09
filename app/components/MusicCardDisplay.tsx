@@ -45,6 +45,12 @@ function MusicCardDisplay({
           raised={false}
           sx={{
             width: "100%",
+            // backgroundColor: "#aa0000"
+          }}
+          stackSx={{
+            maxWidth: "750px",
+            // backgroundColor: "#aaaa00",
+            width: "100%",
           }}
           boxSx={{
             width: "30%",

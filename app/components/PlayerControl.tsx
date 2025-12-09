@@ -1,4 +1,4 @@
-import { CharacterId, GlobalData, Playback } from "../types/Configs";
+import { CharacterId, GlobalData, Playback, PlaybackState } from "../types/Configs";
 import { IconButton, Slider, Stack } from "@mui/material";
 import {
   SkipNextRounded as RightIcon,
@@ -13,6 +13,7 @@ export interface PlayerControlProps {
   currentCharacterId: CharacterId;
   playback: Playback;
   setPlayback: (playback: Playback) => void;
+  setPlaybackTime?: (time: number) => void;
   onNextMusic: () => void;
   onPreviousMusic: () => void;
   onPlay(): void;
@@ -21,12 +22,18 @@ export interface PlayerControlProps {
 
 function PlaybackIconButton({ disabled, onClick, children }: 
   { 
-    disabled: boolean; onClick: () => void,
+    disabled?: boolean; onClick: () => void,
     children?: React.ReactNode
   }
 ) {
+  if (disabled === undefined) {
+    disabled = false;
+  }
   return (
-    <IconButton onClick={onClick} disabled={disabled} size="large">
+    <IconButton 
+      onClick={onClick} disabled={disabled} size="large"
+      color="primary"
+    >
       {children}
     </IconButton>
   );
@@ -41,20 +48,24 @@ function formatTime(seconds: number): string {
 export default function PlayerControl({
   showSlider,
   data, currentCharacterId, playback, setPlayback,
-  onNextMusic, onPreviousMusic, onPlay, onPause
+  onNextMusic, onPreviousMusic, onPlay, onPause,
+  setPlaybackTime
 }: PlayerControlProps) {
+  console.log("Rendering PlayerControl with playback state:", playback.state);
   const buttons = (
     <Stack direction="row" spacing={4} alignItems="center">
       <PlaybackIconButton 
-        disabled={playback.isCountingDown} 
         onClick={onPreviousMusic} 
       >
         <LeftIcon fontSize="large"/>
       </PlaybackIconButton>
-      <PlaybackIconButton disabled={playback.isCountingDown} onClick={playback.isPlaying ? onPause : onPlay} >
-        {playback.isPlaying ? <PauseIcon fontSize="large"/> : <PlayIcon fontSize="large"/>}
+      <PlaybackIconButton 
+        disabled={playback.state === PlaybackState.CountingDown}
+        onClick={playback.state !== PlaybackState.Playing ? onPlay : onPause}
+      >
+        {playback.state !== PlaybackState.Playing ? <PlayIcon fontSize="large"/> : <PauseIcon fontSize="large"/>}
       </PlaybackIconButton>
-      <PlaybackIconButton disabled={playback.isCountingDown} onClick={onNextMusic} >
+      <PlaybackIconButton onClick={onNextMusic} >
         <RightIcon fontSize="large"/>
       </PlaybackIconButton>
     </Stack>
@@ -70,8 +81,9 @@ export default function PlayerControl({
         sx={{ width: "clamp(0px, 40%, 300px)" }}
         onChange={(_, value) => {
           const newTime = Array.isArray(value) ? value[0] : value;
-          const newPlayback = { ...playback, currentTime: newTime };
-          setPlayback(newPlayback);
+          if (setPlaybackTime) {
+            setPlaybackTime(newTime);
+          }
         }}
       />
       <div>{formatTime(playback.duration)}</div>
