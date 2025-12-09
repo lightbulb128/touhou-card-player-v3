@@ -1,7 +1,12 @@
 "use client";
 
 import { Box, Button, Grid, Stack, TextField, Typography } from "@mui/material";
-import { CharacterId, createPlayingOrder, getMusicInfoFromCharacterId, GlobalData, MusicSelectionMap, Playback, PlaybackSetting } from "../types/Configs";
+import { 
+  CharacterId, createPlayingOrder, 
+  getMusicInfoFromCharacterId, GlobalData, 
+  MusicSelectionMap, Playback, PlaybackSetting,
+  PlaybackState
+} from "../types/Configs";
 import PlayerControl from "./PlayerControl";
 import MusicCardDisplay from "./MusicCardDisplay";
 import { CardBackgroundState, CharacterCard } from "./CharacterCard";
@@ -16,7 +21,9 @@ export interface PlayerTabProps {
   playingOrder: Array<CharacterId>;
   characterTemporaryDisabled: Map<CharacterId, boolean>;
   playbackSetting: PlaybackSetting;
+  playbackState: PlaybackState;
   setPlayback: (playback: Playback) => void;
+  setPlaybackState: (state: PlaybackState) => void;
   setCharacterTemporaryDisabled: (map: Map<CharacterId, boolean>) => void;
   setPlayingOrder: (order: Array<CharacterId>) => void;
   setCurrentCharacterId: (characterId: CharacterId) => void;
@@ -33,7 +40,8 @@ export default function PlayerTab({
   musicSelection, 
   onNextMusic, onPreviousMusic, onPlay, onPause,
   characterTemporaryDisabled, setCharacterTemporaryDisabled, setPlayingOrder, setCurrentCharacterId,
-  playbackSetting, setPlaybackSetting, setPlaybackTime
+  playbackSetting, setPlaybackSetting, setPlaybackTime,
+  playbackState, setPlaybackState,
 }: PlayerTabProps) {
 
   const [hoveringCharacterId, setHoveringCharacterId] = useState<CharacterId | null>(null);
@@ -206,7 +214,9 @@ export default function PlayerTab({
           data={data}
           currentCharacterId={currentCharacterId}
           playback={playback}
+          playbackState={playbackState}
           setPlayback={setPlayback}
+          setPlaybackState={setPlaybackState}
           setPlaybackTime={setPlaybackTime}
           onNextMusic={onNextMusic}
           onPreviousMusic={onPreviousMusic}

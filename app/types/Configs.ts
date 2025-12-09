@@ -87,12 +87,10 @@ enum PlaybackState {
 class Playback {
   currentTime: number;
   duration: number;
-  state: PlaybackState;
 
   constructor() {
     this.currentTime = 0;
     this.duration = 0;
-    this.state = PlaybackState.Stopped;
   }
 }
 

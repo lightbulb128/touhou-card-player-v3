@@ -12,8 +12,10 @@ export interface PlayerControlProps {
   data: GlobalData;
   currentCharacterId: CharacterId;
   playback: Playback;
+  playbackState: PlaybackState;
   setPlayback: (playback: Playback) => void;
   setPlaybackTime?: (time: number) => void;
+  setPlaybackState: (state: PlaybackState) => void;
   onNextMusic: () => void;
   onPreviousMusic: () => void;
   onPlay(): void;
@@ -48,10 +50,10 @@ function formatTime(seconds: number): string {
 export default function PlayerControl({
   showSlider,
   data, currentCharacterId, playback, setPlayback,
+  playbackState, setPlaybackState,
   onNextMusic, onPreviousMusic, onPlay, onPause,
   setPlaybackTime
 }: PlayerControlProps) {
-  console.log("Rendering PlayerControl with playback state:", playback.state);
   const buttons = (
     <Stack direction="row" spacing={4} alignItems="center">
       <PlaybackIconButton 
@@ -60,10 +62,10 @@ export default function PlayerControl({
         <LeftIcon fontSize="large"/>
       </PlaybackIconButton>
       <PlaybackIconButton 
-        disabled={playback.state === PlaybackState.CountingDown}
-        onClick={playback.state !== PlaybackState.Playing ? onPlay : onPause}
+        disabled={playbackState === PlaybackState.CountingDown}
+        onClick={playbackState !== PlaybackState.Playing ? onPlay : onPause}
       >
-        {playback.state !== PlaybackState.Playing ? <PlayIcon fontSize="large"/> : <PauseIcon fontSize="large"/>}
+        {playbackState !== PlaybackState.Playing ? <PlayIcon fontSize="large"/> : <PauseIcon fontSize="large"/>}
       </PlaybackIconButton>
       <PlaybackIconButton onClick={onNextMusic} >
         <RightIcon fontSize="large"/>

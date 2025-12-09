@@ -60,6 +60,7 @@ export default function Home() {
     countdown: false, randomStartPosition: false, playbackDuration: 0
   })
   const [pauseTimeoutHandle, setPauseTimeoutHandle] = useState<NodeJS.Timeout | null>(null);
+  const [playbackState, setPlaybackState] = useState<PlaybackState>(PlaybackState.Stopped);
 
   // region utility funcs
   const getMusicId = (character: CharacterId): MusicUniqueId | null => {
@@ -175,20 +176,15 @@ export default function Home() {
         audioElementRef.current.src = "";
       }
       if (playbackSetting.countdown && (
-        playback.state === PlaybackState.Playing ||
-        playback.state === PlaybackState.TimeoutPause
+        playbackState === PlaybackState.Playing ||
+        playbackState === PlaybackState.TimeoutPause
       )) {
         // play countdown audio first
         if (countdownAudioElementRef.current) {
           countdownAudioElementRef.current.currentTime = 0;
           countdownAudioElementRef.current.play();
         }
-        setPlayback((original) => {
-          return {
-            ...original,
-            state: PlaybackState.CountingDown,
-          }
-        });
+        setPlaybackState(PlaybackState.CountingDown);
       }
     }
   }, [currentCharacterId]);
@@ -206,12 +202,7 @@ export default function Home() {
           audioElementRef.current.pause();
         }
         console.log("Auto pausing playback due to timeout");
-        setPlayback((original => {
-          return {
-            ...original,
-            state: PlaybackState.TimeoutPause,
-          }
-        }));
+        setPlaybackState(PlaybackState.TimeoutPause);
         setPauseTimeoutHandle(null);
       }, playbackSetting.playbackDuration * 1000);
       setPauseTimeoutHandle(timeoutHandle);
@@ -225,19 +216,14 @@ export default function Home() {
       }
       audioElementRef.current.play();
       resetPauseTimeout();
-      setPlayback((original) => {
-        original.state = PlaybackState.Playing;
-        return original;
-      });
+      setPlaybackState(PlaybackState.Playing);
     }
   }
 
   const handlePlay = () => {
     if (audioElementRef.current) {
       audioElementRef.current.play();
-      setPlayback((original) => {
-        return { ...original, state: PlaybackState.Playing };
-      });
+      setPlaybackState(PlaybackState.Playing);
     }
   };
 
@@ -248,23 +234,22 @@ export default function Home() {
     }
     if (audioElementRef.current) {
       audioElementRef.current.pause();
-      setPlayback((original) => {
-        return { ...original, state: PlaybackState.Stopped };
-      });
+      setPlaybackState(PlaybackState.Stopped);
     }
   }
 
   const handleAudioLoadedData = () => {
     // Auto play when data is loaded
     if ((
-      playback.state === PlaybackState.Playing || 
-      playback.state === PlaybackState.TimeoutPause
+      playbackState === PlaybackState.Playing || 
+      playbackState === PlaybackState.TimeoutPause
     ) && audioElementRef.current) {
       if (playbackSetting.randomStartPosition) {
         setRandomPlaybackPosition();
       }
       audioElementRef.current.play();
       resetPauseTimeout();
+      setPlaybackState(PlaybackState.Playing);
     }
   }
 
@@ -357,6 +342,8 @@ export default function Home() {
                 currentCharacterId={currentCharacterId as CharacterId}
                 playback={playback}
                 playbackSetting={playbackSetting}
+                playbackState={playbackState}
+                setPlaybackState={setPlaybackState}
                 setPlayback={setPlayback}
                 setCharacterTemporaryDisabled={setCharacterTemporaryDisabled}
                 setPlayingOrder={setPlayingOrder}
