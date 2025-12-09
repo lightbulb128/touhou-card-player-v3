@@ -26,7 +26,7 @@ function PlaybackIconButton({ disabled, onClick, children }:
   }
 ) {
   return (
-    <IconButton onClick={onClick} disabled={disabled}>
+    <IconButton onClick={onClick} disabled={disabled} size="large">
       {children}
     </IconButton>
   );
@@ -49,25 +49,25 @@ export default function PlayerControl({
         disabled={playback.isCountingDown} 
         onClick={onPreviousMusic} 
       >
-        <LeftIcon />
+        <LeftIcon fontSize="large"/>
       </PlaybackIconButton>
       <PlaybackIconButton disabled={playback.isCountingDown} onClick={playback.isPlaying ? onPause : onPlay} >
-        {playback.isPlaying ? <PauseIcon /> : <PlayIcon />}
+        {playback.isPlaying ? <PauseIcon fontSize="large"/> : <PlayIcon fontSize="large"/>}
       </PlaybackIconButton>
       <PlaybackIconButton disabled={playback.isCountingDown} onClick={onNextMusic} >
-        <RightIcon />
+        <RightIcon fontSize="large"/>
       </PlaybackIconButton>
     </Stack>
   );
   if (!showSlider) {
     return buttons;
   }
-  return <Stack direction="column" spacing={2} alignItems="center">
-    <Stack direction="row" spacing={4} alignItems="center">
+  return <Stack direction="column" spacing={1} alignItems="center" width="100%" justifyContent="center">
+    <Stack direction="row" spacing={3} alignItems="center" width="100%" justifyContent="center">
       <div>{formatTime(playback.currentTime)}</div>
       <Slider value={playback.currentTime} 
         min={0} max={playback.duration} 
-        sx={{ width: 300 }}
+        sx={{ width: "clamp(0px, 40%, 300px)" }}
         onChange={(_, value) => {
           const newTime = Array.isArray(value) ? value[0] : value;
           const newPlayback = { ...playback, currentTime: newTime };

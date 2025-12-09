@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import PlayerTab from "./components/PlayerTab";
-import { CharacterConfig, CharacterId, GlobalData, MusicSelectionMap, Playback } from "./types/Configs";
+import { CharacterConfig, CharacterId, GlobalData, MusicInfo, MusicSelectionMap, MusicUniqueId, Playback } from "./types/Configs";
 import { Box, Button, CssBaseline, Paper, Stack, Tab, Tabs } from "@mui/material";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CreateTheme from "./components/Theme";
@@ -17,7 +17,7 @@ function TabContainer({
     sx={{ width: "100%", paddingLeft: 2, paddingRight: 2 }}
   >
     <Paper
-      sx={{ padding: 2, width: "100%", boxSizing: "border-box" }}
+      sx={{ padding: 2, width: "100%", overflow: "hidden" }}
     >
       {children}
     </Paper>
@@ -26,12 +26,13 @@ function TabContainer({
 
 function createPlayingOrder(
   globalData: GlobalData,
+  musicSelection: MusicSelectionMap,
   temporaryDisabled: Map<CharacterId, boolean>,
   randomize: boolean
 ): Array<CharacterId> {
   const characterIds = Array.from(globalData.characterConfigs.keys());
   let filteredIds = characterIds.filter((charId) => {
-    return !temporaryDisabled.get(charId);
+    return musicSelection.get(charId) !== -1 && !temporaryDisabled.get(charId);
   });
 
   if (randomize) {
@@ -51,6 +52,13 @@ export default function Home() {
 
   type TabKey = "Player" | "Configs" | "Focus" | "Practice" | "Match";
   const allTabs = ["Player", "Configs", "Focus", "Practice", "Match"] as const;
+  const tabNames = {
+    "Player": "Play",
+    "Configs": "Conf",
+    "Focus": "Focu",
+    "Practice": "Prac",
+    "Match": "Matc"
+  }
 
   // refs
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
@@ -65,7 +73,7 @@ export default function Home() {
   const [playingOrder, setPlayingOrder] = useState<Array<CharacterId>>([]);
 
   // region utility funcs
-  const getMusicSourceUrl = (character: CharacterId): string | null => {
+  const getMusicId = (character: CharacterId): MusicUniqueId | null => {
     const selection = musicSelection.get(character);
     if (selection === undefined || selection === -1) {
       return null;
@@ -79,8 +87,27 @@ export default function Home() {
       return null;
     }
     const musicId = musicList[selection];
+    return musicId;
+  }
+  
+  const getMusicSourceUrl = (character: CharacterId): string | null => {
+    const musicId = getMusicId(character);
+    if (musicId === null) {
+      return null;
+    }
     const sourceUrl = globalData.sources.get(musicId);
     return sourceUrl || null;
+  }
+
+  const getMusicInfo = (character: CharacterId): MusicInfo | null => {
+    let musicName = getMusicId(character);
+    if (musicName === null) {
+      return null;
+    }
+    return {
+      ...getMusicInfo(musicName),
+      characterId: character
+    } as MusicInfo;
   }
 
   // region effects
@@ -102,7 +129,7 @@ export default function Home() {
         original.applyFetchedCharacters(characters); 
         original.applyFetchedSources(sources);
         original.applyFetchedPresets(presets);
-        return {...original} as GlobalData;
+        return original;
       });
 
       // set music selection to 0 for all characters
@@ -113,7 +140,7 @@ export default function Home() {
       setMusicSelection(initialSelection);
 
       // create playing order
-      const order = createPlayingOrder(globalData, characterTemporaryDisabled, false);
+      const order = createPlayingOrder(globalData, musicSelection, characterTemporaryDisabled, false);
       setPlayingOrder(order);
 
       // set current character to the first one
@@ -242,7 +269,7 @@ export default function Home() {
                 variant={activeTab === index ? "contained" : "outlined"}
                 onClick={() => setActiveTab(index)}
               >
-                {tabName}
+                {tabNames[tabName as TabKey]}
               </Button>
             ))}
           </Stack>
@@ -250,6 +277,8 @@ export default function Home() {
             <TabContainer>
               <PlayerTab
                 data={globalData}
+                playingOrder={playingOrder}
+                musicSelection={musicSelection}
                 currentCharacterId={currentCharacterId as CharacterId}
                 playback={playback}
                 setPlayback={setPlayback}

@@ -1,60 +1,169 @@
+import { Box, Paper, Stack, SxProps } from "@mui/material";
 import { CharacterId, GlobalData } from "../types/Configs";
 
-enum CardBackgroundState {
-    Placeholder,
-    Normal,
-    Hover,
-    Disabled,
-    DisabledHover,
-    Selected,
-    Correct,
-    Incorrect
+const CardAspectRatio = 703 / 1000;
+const CardSourcePrefix = "https://raw.githubusercontent.com/lightbulb128/touhou-card-player/refs/heads/master/public/cards-dairi/"
+
+export enum CardBackgroundState {
+	Placeholder,
+	Normal,
+	Hover,
+	Disabled,
+	DisabledHover,
+	Selected,
+	Correct,
+	Incorrect
 }
 
 export interface CharacterCardProps {
-    imageSource: string;
-    backgroundState: CardBackgroundState;
-    raiseOnHover?: boolean;
-    raiseDirection?: "up" | "down";
+	imageSource: string;
+	backgroundState: CardBackgroundState;
+	raised: boolean;
+	raiseDirection?: "up" | "down";
+	onClick?: () => void;
+	sx?: object;
+	aspectRatio?: number;
+	width: string;
 }
 
-export default function CharacterCard({
-    imageSource,
-    backgroundState, raiseOnHover, raiseDirection
+export function CharacterCard({
+	imageSource,
+	backgroundState, raised, raiseDirection,
+	onClick, sx, aspectRatio, width
 }: CharacterCardProps) {
-    if (raiseOnHover === undefined) {
-        raiseOnHover = false;
-    }
-    if (raiseDirection === undefined) {
-        raiseDirection = "up";
-    }
-    const isPlaceholder: boolean = backgroundState === CardBackgroundState.Placeholder || imageSource === "";
-    const cardSource = isPlaceholder ? "" : imageSource;
-    let backgroundColor = "transparent";
-    if (!isPlaceholder) {
-        switch (backgroundState) {
-            case CardBackgroundState.Normal:
-                backgroundColor = "#ffffff";
-                break;
-            case CardBackgroundState.Hover:
-                backgroundColor = "#b3f9ffff";
-            case CardBackgroundState.Disabled:
-                backgroundColor = "#d3d3d3ff";
-                break;
-            case CardBackgroundState.DisabledHover:
-                backgroundColor = "#92b6beff";
-                break;
-            case CardBackgroundState.Selected:
-                backgroundColor = "#71d7ffff";
-                break;
-            case CardBackgroundState.Correct:
-                backgroundColor = "#bef3beff";
-                break;
-            case CardBackgroundState.Incorrect:
-                backgroundColor = "#ffcccbff";
-                break;
-        }
-    }
-    const isGrayscale = backgroundState === CardBackgroundState.Disabled || backgroundState === CardBackgroundState.DisabledHover;
-    const borderStyle = isPlaceholder ? "2px dashed gray" : "none";
+	if (raised === undefined) {
+		raised = false;
+	}
+	if (raiseDirection === undefined) {
+		raiseDirection = "up";
+	}
+	if (aspectRatio === undefined) {
+		aspectRatio = CardAspectRatio;
+	}
+	const isPlaceholder: boolean = backgroundState === CardBackgroundState.Placeholder || imageSource === "";
+	const cardSource = isPlaceholder ? "" : imageSource;
+	let backgroundColor = "transparent";
+	if (!isPlaceholder) {
+		switch (backgroundState) {
+			case CardBackgroundState.Normal:
+				backgroundColor = "#ffffff";
+				break;
+			case CardBackgroundState.Hover:
+				backgroundColor = "#b3f9ffff";
+			case CardBackgroundState.Disabled:
+				backgroundColor = "#d3d3d3ff";
+				break;
+			case CardBackgroundState.DisabledHover:
+				backgroundColor = "#92b6beff";
+				break;
+			case CardBackgroundState.Selected:
+				backgroundColor = "#71d7ffff";
+				break;
+			case CardBackgroundState.Correct:
+				backgroundColor = "#bef3beff";
+				break;
+			case CardBackgroundState.Incorrect:
+				backgroundColor = "#ffcccbff";
+				break;
+		}
+	}
+	const isGrayscale = backgroundState === CardBackgroundState.Disabled || backgroundState === CardBackgroundState.DisabledHover;
+	const borderStyle = isPlaceholder ? "2px dashed gray" : "none";
+	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-10px)" : "translateY(10px)") : "none";
+	return (
+		<Paper elevation={3} sx={{
+			width: width,
+			backgroundColor: backgroundColor,
+			border: borderStyle,
+			filter: isGrayscale ? "grayscale(100%)" : "none",
+			transition: "transform 0.3s ease",
+			transform: raiseTransform,
+			...sx
+		}}
+			onClick={onClick ? () => onClick() : undefined}
+		>
+			<Box sx={{
+				width: "100%",
+				position: "relative",
+				aspectRatio: aspectRatio,
+				justifyContent: "center",
+				alignItems: "center",
+			}}
+			>
+				{!isPlaceholder && (
+					<img
+						src={CardSourcePrefix + cardSource}
+						alt="Character Card"
+						style={{
+							position: 'absolute',
+							top: 0,
+							left: 0,
+							width: '100%',
+							height: 'auto',
+							objectFit: 'cover',
+							userSelect: 'none',
+						}}
+					/>
+				)}
+			</Box>
+		</Paper>
+	)
 }
+
+export interface CharacterCardStackedProps {
+	imageSources: string[];
+	raised: boolean;
+	raiseDirection?: "up" | "down";
+	backgroundState?: CardBackgroundState;
+	expanded?: boolean;
+	sx?: SxProps;
+	boxSx?: SxProps;
+}
+
+export function CharacterCardStacked({
+	imageSources,
+	raised, raiseDirection,
+	backgroundState, expanded, 
+	sx, boxSx
+}: CharacterCardStackedProps) {
+	if (backgroundState === undefined) { backgroundState = CardBackgroundState.Normal; }
+	if (expanded === undefined) { expanded = false; }
+	const cardCount = imageSources.length;
+	if (raised === undefined) { raised = false; }
+	if (raiseDirection === undefined) { raiseDirection = "up"; }
+	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-10px)" : "translateY(10px)") : "none";
+	return (
+		<Stack 
+			direction="row" spacing={1} alignItems="center" justifyContent="center"
+			sx={{ 
+				...sx
+			}}
+		>
+			{imageSources.map((source, index) => (
+				<Box
+					key={index}
+					sx={{
+						marginLeft: index === 0 ? "0%" : (expanded ? "2%" : "-20%") + " !important",
+						zIndex: cardCount - index,
+						transition: "margin-left 0.8s ease, transform 0.3s ease",
+						transitionDelay: "0.3s",
+						width: "100%",
+						transform: raiseTransform,
+						...boxSx
+					}}
+				>
+					<CharacterCard
+						key={index}
+						imageSource={source}
+						width="100%"
+						raised={false}
+						aspectRatio={CardAspectRatio}
+						backgroundState={backgroundState!}
+					/>
+				</Box>
+			))}
+		</Stack>
+	)
+	
+}
+

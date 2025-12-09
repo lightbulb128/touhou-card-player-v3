@@ -15,7 +15,6 @@ export default function CustomTabs({
         overflow: "hidden",
         width: "100%",
         display: "flex",
-        backgroundColor: "red",
       }}
     >
       {innerTabs.map((tab, index) => (
@@ -28,7 +27,7 @@ export default function CustomTabs({
             position: "absolute",
             transform: `translateX(${(index - activeTab) * 100}%)`,
             transition: "transform 0.3s ease-in-out",
-            backgroundColor: index % 2 === 0 ? "background.paper" : "background.default",
+            // backgroundColor: index % 2 === 0 ? "background.paper" : "background.default",
           }}
         >
           {tab}

@@ -16,6 +16,15 @@
         ],
         "tags": ["主人公"]
     },
+    "ルナサ/メルラン/リリカ・プリズムリバー": {
+        "card": [
+            "ルナサ.png",
+            "メルラン.png",
+            "リリカ.png"
+        ],
+        "music": "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - 幽霊楽団　～ Phantom Ensemble.mp3",
+        "tags": ["妖々夢"]
+    },
     "霧雨魔理沙": {
         "card": "魔理沙.png",
         "music": [
@@ -149,15 +158,6 @@
     "リリーホワイト": {
         "card": "リリー.png",
         "music": "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - 天空の花の都.mp3",
-        "tags": ["妖々夢"]
-    },
-    "ルナサ/メルラン/リリカ・プリズムリバー": {
-        "card": [
-            "ルナサ.png",
-            "メルラン.png",
-            "リリカ.png"
-        ],
-        "music": "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - 幽霊楽団　～ Phantom Ensemble.mp3",
         "tags": ["妖々夢"]
     },
     "魂魄妖夢": {
