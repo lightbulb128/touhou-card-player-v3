@@ -2,7 +2,9 @@ import { Box, Paper, Stack, SxProps } from "@mui/material";
 import { CharacterId, GlobalData } from "../types/Configs";
 
 const CardAspectRatio = 703 / 1000;
-const CardSourcePrefix = "https://r2bucket-touhou.hgjertkljw.org/cards/"
+const CardCollectionPrefix: Map<string, string> = new Map([
+	["dairi-sd", "https://r2bucket-touhou.hgjertkljw.org/cards/"],
+]);
 
 export enum CardBackgroundState {
 	Placeholder,
@@ -16,6 +18,7 @@ export enum CardBackgroundState {
 }
 
 export interface CharacterCardProps {
+	cardCollection: string;
 	imageSource: string;
 	backgroundState: CardBackgroundState;
 	raised: boolean;
@@ -28,6 +31,7 @@ export interface CharacterCardProps {
 }
 
 export function CharacterCard({
+	cardCollection,
 	imageSource,
 	backgroundState, raised, raiseDirection,
 	onClick, sx, aspectRatio, width,
@@ -73,6 +77,7 @@ export function CharacterCard({
 	const isGrayscale = backgroundState === CardBackgroundState.Disabled || backgroundState === CardBackgroundState.DisabledHover;
 	const borderStyle = isPlaceholder ? "2px dashed gray" : "none";
 	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-10%)" : "translateY(10%)") : "translateY(0px)";
+	const cardSourcePrefix = CardCollectionPrefix.get(cardCollection) || CardCollectionPrefix.get("dairi-sd");
 	return (
 		<Paper elevation={3} 
 			sx={{
@@ -96,7 +101,7 @@ export function CharacterCard({
 			>
 				{!isPlaceholder && (
 					<img
-						src={CardSourcePrefix + cardSource}
+						src={cardSourcePrefix + cardSource}
 						alt="Character Card"
 						style={{
 							position: 'absolute',
@@ -117,6 +122,7 @@ export function CharacterCard({
 }
 
 export interface CharacterCardStackedProps {
+	cardCollection: string;
 	imageSources: string[];
 	raised: boolean;
 	raiseDirection?: "up" | "down";
@@ -128,6 +134,7 @@ export interface CharacterCardStackedProps {
 }
 
 export function CharacterCardStacked({
+	cardCollection,
 	imageSources,
 	raised, raiseDirection,
 	backgroundState, expanded, 
@@ -164,6 +171,7 @@ export function CharacterCardStacked({
 						}}
 					>
 						<CharacterCard
+							cardCollection={cardCollection}
 							key={index}
 							imageSource={source}
 							width="100%"

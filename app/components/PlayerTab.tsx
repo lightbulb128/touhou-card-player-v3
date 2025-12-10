@@ -63,6 +63,7 @@ export default function PlayerTab({
     // add a placeholder card first
     upcomingCards.push(<CharacterCard
       key={`placeholder-card`}
+      cardCollection={data.cardCollection}
       imageSource={placeholderCardSource}
       backgroundState={CardBackgroundState.Placeholder}
       raised={false}
@@ -104,6 +105,7 @@ export default function PlayerTab({
       cards.forEach((cardSource, cardIndex) => {
         const element = <CharacterCard
           key={`${characterId}-card-${cardIndex}`}
+          cardCollection={data.cardCollection}
           imageSource={cardSource}
           backgroundState={background}
           width={`${singleCardWp}%`}

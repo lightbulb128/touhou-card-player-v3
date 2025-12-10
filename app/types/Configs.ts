@@ -22,12 +22,14 @@ class GlobalData {
   sources: MusicSourceMap;
   cardSourcePrefix: string;
   presets: MusicPresets;
+  cardCollection: string;
 
   constructor() {
     this.characterConfigs = new Map();
     this.sources = new Map();
     this.cardSourcePrefix = "";
     this.presets = new Map();
+    this.cardCollection = "dairi-sd";
   }
 
   applyFetchedCharacters(jsonData: any) {
