@@ -14,6 +14,7 @@ import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CreateTheme from "./components/Theme";
 import CustomTabs from "./components/CustomTabs";
 import ListTab from "./components/ListTab";
+import GameTab from "./components/GameTab";
 
 function TabContainer({
   children
@@ -329,7 +330,6 @@ export default function Home() {
             {tabButton(1, "List")}
             {tabButton(2, "Configs")}
             {tabButton(3, "Practice")}
-            {tabButton(4, "Match")}
           </Stack>
           <CustomTabs activeTab={activeTab} onChange={setActiveTab} innerTabs={[
             <TabContainer>
@@ -376,9 +376,16 @@ export default function Home() {
               ></ListTab>
             </TabContainer>,
             <TabContainer>Configs</TabContainer>,
-            <TabContainer>Alice is best</TabContainer>,
-            <TabContainer>Practice</TabContainer>,
-            <TabContainer>Match</TabContainer>
+            <TabContainer>
+              <GameTab
+                data={globalData}
+                musicSelection={musicSelection}
+                characterTemporaryDisabled={characterTemporaryDisabled}
+                currentCharacterId={currentCharacterId}
+                playingOrder={playingOrder}
+                setCurrentCharacterId={setCurrentCharacterId}
+              ></GameTab>
+            </TabContainer>
           ]}>
           </CustomTabs>
         </Stack>

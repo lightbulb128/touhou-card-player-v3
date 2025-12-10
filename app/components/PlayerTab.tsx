@@ -171,6 +171,7 @@ export default function PlayerTab({
           {/* Place holder card to keep height */}
           <Box sx={{ visibility: "hidden", width: "100%" }}>
             <MusicCardDisplay
+              cardCollection={data.cardCollection}
               cardSources={[placeholderCardSource]}
               title={"Placeholder"}
               album={"Placeholder"}
@@ -200,6 +201,7 @@ export default function PlayerTab({
                 }}
               >
                 <MusicCardDisplay
+                  cardCollection={data.cardCollection}
                   key={characterId}
                   cardSources={cardSources}
                   title={musicInfo.title}

@@ -3,6 +3,7 @@ import { CharacterId } from "../types/Configs";
 import { CharacterCardStacked } from "./CharacterCard";
 
 export interface MusicCardDisplayProps {
+  cardCollection: string;
   cardSources: string[];
   title: string;
   album: string;
@@ -11,6 +12,7 @@ export interface MusicCardDisplayProps {
 }
 
 function MusicCardDisplay({
+  cardCollection,
   cardSources, title, album, characterId, expanded,
 }: MusicCardDisplayProps) {
   const typographySx = {
@@ -40,6 +42,7 @@ function MusicCardDisplay({
         }}
       >
         <CharacterCardStacked
+          cardCollection={cardCollection}
           imageSources={cardSources}
           expanded={expanded}
           raised={false}

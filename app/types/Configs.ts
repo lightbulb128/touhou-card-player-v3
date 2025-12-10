@@ -16,6 +16,7 @@ type MusicInfo = {
   title: string;
   album: string;
 }
+export const CardAspectRatio = 703 / 1000;
 
 class GlobalData {
   characterConfigs: CharacterConfigMap;

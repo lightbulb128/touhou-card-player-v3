@@ -1,7 +1,6 @@
 import { Box, Paper, Stack, SxProps } from "@mui/material";
-import { CharacterId, GlobalData } from "../types/Configs";
+import { CharacterId, GlobalData, CardAspectRatio } from "../types/Configs";
 
-const CardAspectRatio = 703 / 1000;
 const CardCollectionPrefix: Map<string, string> = new Map([
 	["dairi-sd", "https://r2bucket-touhou.hgjertkljw.org/cards/"],
 ]);
@@ -21,12 +20,14 @@ export interface CharacterCardProps {
 	cardCollection: string;
 	imageSource: string;
 	backgroundState: CardBackgroundState;
-	raised: boolean;
+	raised?: boolean;
 	raiseDirection?: "up" | "down";
 	onClick?: () => void;
-	sx?: object;
+	sx?: SxProps;
 	aspectRatio?: number;
 	width: string;
+	paperElevation?: number;
+	paperVariant?: "elevation" | "outlined";
 	[key: string]: any;
 }
 
@@ -35,8 +36,10 @@ export function CharacterCard({
 	imageSource,
 	backgroundState, raised, raiseDirection,
 	onClick, sx, aspectRatio, width,
+	paperElevation, paperVariant,
 	...props
 }: CharacterCardProps) {
+
 	if (raised === undefined) {
 		raised = false;
 	}
@@ -46,6 +49,13 @@ export function CharacterCard({
 	if (aspectRatio === undefined) {
 		aspectRatio = CardAspectRatio;
 	}
+	if (paperElevation === undefined) {
+		paperElevation = 3;
+	}
+	if (paperVariant === undefined) {
+		paperVariant = "elevation";
+	}
+
 	const isPlaceholder: boolean = backgroundState === CardBackgroundState.Placeholder || imageSource === "";
 	const cardSource = isPlaceholder ? "" : imageSource;
 	let backgroundColor = "transparent";
@@ -79,7 +89,7 @@ export function CharacterCard({
 	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-10%)" : "translateY(10%)") : "translateY(0px)";
 	const cardSourcePrefix = CardCollectionPrefix.get(cardCollection) || CardCollectionPrefix.get("dairi-sd");
 	return (
-		<Paper elevation={3} 
+		<Paper elevation={paperElevation} variant={paperVariant}
 			sx={{
 				width: width,
 				backgroundColor: backgroundColor,
@@ -103,6 +113,7 @@ export function CharacterCard({
 					<img
 						src={cardSourcePrefix + cardSource}
 						alt="Character Card"
+						draggable="false"
 						style={{
 							position: 'absolute',
 							top: 0,

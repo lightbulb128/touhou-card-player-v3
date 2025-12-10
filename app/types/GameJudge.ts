@@ -36,6 +36,9 @@ class CardInfo {
   equals(other: CardInfo): boolean {
     return this.characterId === other.characterId && this.cardIndex === other.cardIndex;
   }
+  toKey(): string {
+    return `${this.characterId}-${this.cardIndex}`;
+  }
 }
 
 class PickEvent {
@@ -50,11 +53,17 @@ class PickEvent {
   }
 };
 
+enum OpponentType {
+  None,
+  CPU,
+  RemotePlayer
+}
+
 class GameJudge {
 
   // variables
   isServer: boolean;
-  hasOpponent: boolean;
+  opponentType: OpponentType;
   traditionalMode: boolean;
   state: GameJudgeState;
   confirmations: {
@@ -80,13 +89,13 @@ class GameJudge {
 
   // used for setState.
   reconstruct(): GameJudge { 
-    return { ...this };
+    return Object.assign(new GameJudge(), this);
   }
 
   constructor() {
     this.traditionalMode = false; 
     this.isServer = true;
-    this.hasOpponent = false;
+    this.opponentType = OpponentType.None;
     this.state = GameJudgeState.SelectingCards;
     this.confirmations = {
       start: new GameConfirmation(),
@@ -119,6 +128,17 @@ class GameJudge {
       }
     }
     return false;
+  }
+
+  getDeck(player: Player, index: number): CardInfo | null {
+    if (index < 0 || index >= this.deck[player].length) {
+      return null;
+    }
+    const v = this.deck[player][index];
+    if (v.characterId === null) {
+      return null;
+    }
+    return v;
   }
 
   addToDeck(player: Player, cardInfo: CardInfo, toIndex: number | null): boolean {
@@ -168,13 +188,17 @@ class GameJudge {
     return true;
   }
 
+  hasOpponent(): boolean {
+    return this.opponentType !== OpponentType.None;
+  }
+
   confirmStart(player: Player): boolean {
     if (this.state !== GameJudgeState.SelectingCards) {
       console.warn(`[GameJudge.confirmStart] [P${player}] Invalid state: ${this.state}`);
       return false;
     }
     this.confirmations.start.ok[player] = true;
-    if (this.confirmations.start.all(this.hasOpponent)) {
+    if (this.confirmations.start.all(this.hasOpponent())) {
       this.confirmations.start = new GameConfirmation();
       this.nextTurn();
     }
@@ -292,6 +316,24 @@ class GameJudge {
     return true;
   }
 
+  isDeckFull(player: Player): boolean {
+    for (let cardInfo of this.deck[player]) {
+      if (cardInfo.characterId === null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  isDeckEmpty(player: Player): boolean {
+    for (let cardInfo of this.deck[player]) {
+      if (cardInfo.characterId !== null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   setCountdown(refreshCallback: () => void): void {
     if (this.countdownTimeout !== null) {
       clearTimeout(this.countdownTimeout);
@@ -324,9 +366,9 @@ class GameJudge {
       return false;
     }
     this.confirmations.next.ok[player] = true;
-    if (this.confirmations.next.all(this.hasOpponent)) {
+    if (this.confirmations.next.all(this.hasOpponent())) {
       this.confirmations.next = new GameConfirmation();
-      const needTimeout = this.hasOpponent; // TODO: no need to timeout if opponent is CPU.
+      const needTimeout = this.opponentType == OpponentType.RemotePlayer; // only use timeout if there is a remote player
       if (needTimeout) {
         this.setNextTurnTimeout(refreshCallback);
         this.state = GameJudgeState.TurnCountdownNext;
@@ -343,5 +385,6 @@ export {
   GameJudge,
   GameJudgeState,
   CardInfo,
-  PickEvent
+  PickEvent,
+  OpponentType,
 };
