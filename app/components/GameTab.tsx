@@ -68,7 +68,7 @@ export default function GameTab({
   setCurrentCharacterId
 }: GameTabProps) {
 
-  // states
+  // region states
   const [, forceRerender] = useState<{}>({}); // used to force re-render
   const [judge, setJudge] = useState<GameJudge>(new GameJudge());
   const [cardWidthPercentage, setCardWidthPercentage] = useState<number>(0.08);
@@ -76,50 +76,72 @@ export default function GameTab({
   const [unusedCards, setUnusedCards] = useState<CardInfo[]>([]);
   const [hoveringCardInfo, setHoveringCardInfo] = useState<CardInfo | null>(null);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
-
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const removeFromUnused = (cardInfos: Array<CardInfo>) => {
-    const newUnused = unusedCards.slice();
-    let changed = false;
-    cardInfos.forEach((cardInfo) => {
-      const key = cardInfo.toKey();
-      for (let i = 0; i < newUnused.length; i++) {
-        if (newUnused[i].toKey() === key) {
-          newUnused.splice(i, 1);
-          changed = true;
-          break;
-        }
-      }
-    });
-    if (changed) {
-      setUnusedCards(newUnused);
-    }
-  }
+  const playOrderSet = new Set(playingOrder);
+  const cards: Map<string, CardRenderProps> = new Map();
+  const placeholderCards: Array<Position> = new Array<Position>();
+  const naturalCardOrder: Array<CardInfo> = new Array<CardInfo>();
+  const cardInsideDeck: Set<string> = new Set();
+  const characterInsideDeck: Set<CharacterId> = new Set();
 
-  const addToUnused = (cardInfos: Array<CardInfo>) => {
-    const newUnused = unusedCards.slice();
-    let changed = false;
-    cardInfos.forEach((cardInfo) => {
-      const key = cardInfo.toKey();
-      let found = false;
-      for (let i = 0; i < newUnused.length; i++) {
-        if (newUnused[i].toKey() === key) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        newUnused.push(cardInfo);
-        changed = true;
-      }
-    });
-    if (changed) {
-      setUnusedCards(newUnused);
-    }
+  const canvasSpacing = 6;
+  const canvasMargin = 16;
+  const opponentDeckTop = canvasMargin;
+  const deckColumns = judge.deckColumns; const deckRows = judge.deckRows;
+  const canvasWidth = (containerRef.current ? containerRef.current.clientWidth : 800) - canvasMargin * 2;
+  const cardWidth = canvasWidth * cardWidthPercentage;
+  const cardHeight = cardWidth / CardAspectRatio;
+  const deckWidth = deckColumns * cardWidth + (deckColumns - 1) * canvasSpacing;
+  const deckHeight = deckRows * cardHeight + (deckRows - 1) * canvasSpacing;
+  const deckLeft = (canvasWidth - deckWidth) / 2;
+  const buttonSize = 48;
+  const sliderHeight = 28;
+  let middleBarTop = canvasMargin;
+  let middleBarHeight = 0;
+  if (judge.opponentType !== OpponentType.None) {
+    middleBarTop += deckHeight + canvasSpacing;
   }
+  if (judge.state === GameJudgeState.SelectingCards) {
+    middleBarHeight = cardHeight + canvasSpacing + sliderHeight;
+  } else {
+    middleBarHeight = 48;
+  }
+  const middleBarBottom = middleBarTop + middleBarHeight;
+  const playerDeckTop = middleBarBottom + canvasSpacing;
+  const cardSelectionOverlap = cardWidth * 0.3;
+
+  data.characterConfigs.forEach((characterConfig, characterId) => {
+    characterConfig.card.forEach((cardId, index) => {
+      const cardInfo = new CardInfo(characterId, index);
+      const props: CardRenderProps = {
+        cardInfo: cardInfo,
+        x: 0, y: 0,
+        zIndex: 0,
+        width: `${cardWidth}px`,
+        backgroundState: CardBackgroundState.Normal,
+        source: cardId,
+        upsideDown: false,
+        onClick: undefined,
+        onMouseEnter: undefined,
+        onMouseLeave: undefined,
+      }
+      cards.set(cardInfo.toKey(), props);
+      naturalCardOrder.push(cardInfo);
+    })
+  });
+  const totalCardCount = cards.size;
+
+  judge.deck.forEach((d) => {
+    d.forEach((cardInfo) => {
+      cardInsideDeck.add(cardInfo.toKey());
+      if (cardInfo.characterId !== null) {
+        characterInsideDeck.add(cardInfo.characterId);
+      }
+    })
+  });
   
-  // utility funcs
+  // region utility funcs
   const characterIdToCardInfos = (characterId: CharacterId, except: number = -1): Array<CardInfo> => {
     const characterConfig = data.characterConfigs.get(characterId);
     const cardInfos: Array<CardInfo> = new Array<CardInfo>();
@@ -156,7 +178,61 @@ export default function GameTab({
     return null;
   }
 
-  // effects
+  const updateUnusedCards = () => {
+    const newUnused: Array<CardInfo> = [];
+    const isUnused = (cardInfo: CardInfo): boolean => {
+      if (cardInfo.characterId === null) { return false; }
+      const characterId = cardInfo.characterId!;
+      const musicIndex = musicSelection.get(characterId) || 0;
+      if (musicIndex === -1) {
+        return true;
+      }
+      if (dragInfo) {
+        if (dragInfo.cardInfo.characterId === characterId && dragInfo.cardInfo.cardIndex !== cardInfo.cardIndex) {
+          return true;
+        }
+      }
+      if (characterInsideDeck.has(characterId) && !cardInsideDeck.has(cardInfo.toKey())) {
+        return true;
+      }
+      return false;
+    };
+    
+    data.characterConfigs.forEach((characterConfig, characterId) => {
+      characterConfig.card.forEach((cardId, index) => {
+        const cardInfo = new CardInfo(characterId, index);
+        if (isUnused(cardInfo)) {
+          newUnused.push(cardInfo);
+        }
+      });
+    });
+    
+    const unusedKeysSet = new Set<string>();
+    let changed = false;
+    const finalUnused: Array<CardInfo> = [];
+    unusedCards.forEach((cardInfo) => {
+      const key = cardInfo.toKey();
+      if (isUnused(cardInfo) && !unusedKeysSet.has(key)) {
+        unusedKeysSet.add(key);
+        finalUnused.push(cardInfo);
+      } else {
+        changed = true;
+      }
+    });
+    newUnused.forEach((cardInfo) => {
+      const key = cardInfo.toKey();
+      if (!unusedKeysSet.has(key)) {
+        unusedKeysSet.add(key);
+        finalUnused.push(cardInfo);
+        changed = true;
+      }
+    });
+    if (changed) {
+      setUnusedCards(finalUnused);
+    }
+  }
+
+  // region use effects
   useEffect(() => {
     judge.playingOrder = playingOrder;
     judge.characterTemporaryDisabled = characterTemporaryDisabled;
@@ -176,91 +252,13 @@ export default function GameTab({
       window.removeEventListener('resize', handleResize);
     };
   }, []);
-
-  const playOrderSet = new Set(playingOrder);
-  const cards: Map<string, CardRenderProps> = new Map();
-  const placeholderCards: Array<Position> = new Array<Position>();
-  const naturalCardOrder: Array<CardInfo> = new Array<CardInfo>();
-  const cardInsideDeck: Set<string> = new Set();
-  const characterInsideDeck: Set<CharacterId> = new Set();
-  judge.deck.forEach((d) => {
-    d.forEach((cardInfo) => {
-      cardInsideDeck.add(cardInfo.toKey());
-      if (cardInfo.characterId !== null) {
-        characterInsideDeck.add(cardInfo.characterId);
-      }
-    })
-  });
   
   useEffect(() => {
-    // if music selection is -1, add to unused cards
-    const newUnused: Array<CardInfo> = [];
-    data.characterConfigs.forEach((characterConfig, characterId) => {
-      const musicIndex = musicSelection.get(characterId) || 0;
-      if (musicIndex === -1) {
-        characterConfig.card.forEach((cardId, index) => {
-          const cardInfo = new CardInfo(characterId, index);
-          newUnused.push(cardInfo);
-        });
-      }
-    });
-    const isUnusedBecauseOfSibling = (cardInfo: CardInfo): boolean => {
-      const characterId = cardInfo.characterId!;
-      if (dragInfo) {
-        if (dragInfo.cardInfo.characterId === characterId && dragInfo.cardInfo.cardIndex !== cardInfo.cardIndex) {
-          return true;
-        }
-      }
-      if (characterInsideDeck.has(characterId) && !cardInsideDeck.has(cardInfo.toKey())) {
-        return true;
-      }
-      return false;
-    };
-    unusedCards.forEach((cardInfo) => {
-      if (isUnusedBecauseOfSibling(cardInfo)) {
-        newUnused.push(cardInfo);
-      }
-    })
-    // keep unique
-    const unique: Set<string> = new Set();
-    const finalUnused: Array<CardInfo> = [];
-    newUnused.forEach((cardInfo) => {
-      const key = cardInfo.toKey();
-      if (!unique.has(key)) {
-        unique.add(key);
-        finalUnused.push(cardInfo);
-      }
-    });
-    setUnusedCards(finalUnused);
-  }, [data, musicSelection])
+    updateUnusedCards();
+  }, [data, musicSelection, judge, dragInfo]);
 
   
   // calculate anchor positions
-  const canvasSpacing = 6;
-  const canvasMargin = 16;
-  const opponentDeckTop = canvasMargin;
-  const deckColumns = judge.deckColumns; const deckRows = judge.deckRows;
-  const canvasWidth = (containerRef.current ? containerRef.current.clientWidth : 800) - canvasMargin * 2;
-  const cardWidth = canvasWidth * cardWidthPercentage;
-  const cardHeight = cardWidth / CardAspectRatio;
-  const deckWidth = deckColumns * cardWidth + (deckColumns - 1) * canvasSpacing;
-  const deckHeight = deckRows * cardHeight + (deckRows - 1) * canvasSpacing;
-  const deckLeft = (canvasWidth - deckWidth) / 2;
-  const buttonSize = 48;
-  const sliderHeight = 28;
-  let middleBarTop = canvasMargin;
-  let middleBarHeight = 0;
-  if (judge.opponentType !== OpponentType.None) {
-    middleBarTop += deckHeight + canvasSpacing;
-  }
-  if (judge.state === GameJudgeState.SelectingCards) {
-    middleBarHeight = cardHeight + canvasSpacing + sliderHeight;
-  } else {
-    middleBarHeight = 48;
-  }
-  const middleBarBottom = middleBarTop + middleBarHeight;
-  const playerDeckTop = middleBarBottom + canvasSpacing;
-  const cardSelectionOverlap = cardWidth * 0.3;
   const toDeckCardPosition = (deckIndex: 0 | 1, cardIndex: number): Position => {
     const row = Math.floor(cardIndex / deckColumns);
     const column = cardIndex % deckColumns;
@@ -278,26 +276,6 @@ export default function GameTab({
   }
 
   // create all cards
-  data.characterConfigs.forEach((characterConfig, characterId) => {
-    characterConfig.card.forEach((cardId, index) => {
-      const cardInfo = new CardInfo(characterId, index);
-      const props: CardRenderProps = {
-        cardInfo: cardInfo,
-        x: 0, y: 0,
-        zIndex: 0,
-        width: `${cardWidth}px`,
-        backgroundState: CardBackgroundState.Normal,
-        source: cardId,
-        upsideDown: false,
-        onClick: undefined,
-        onMouseEnter: undefined,
-        onMouseLeave: undefined,
-      }
-      cards.set(cardInfo.toKey(), props);
-      naturalCardOrder.push(cardInfo);
-    })
-  });
-  const totalCardCount = cards.size;
 
   // Alice deck
   judge.deck[0].forEach((cardInfo, index) => {
@@ -422,7 +400,8 @@ export default function GameTab({
     cardProps.zIndex = index;
   });
 
-  // handlers
+  // region handlers
+
   const handleMouseDownCanvas = (event: React.MouseEvent) => {
     const mouseX = event.clientX - (containerRef.current ? containerRef.current.getBoundingClientRect().left : 0);
     const mouseY = event.clientY - (containerRef.current ? containerRef.current.getBoundingClientRect().top : 0);
@@ -456,7 +435,6 @@ export default function GameTab({
           });
           // add other cards of the same character to unused
           const otherCardInfos = characterIdToCardInfos(cardInfo.characterId!, cardInfo.cardIndex);
-          addToUnused(otherCardInfos);
           break;
         }
       }
@@ -532,27 +510,17 @@ export default function GameTab({
           if (dragInfo.dragType === "fromDeck") {
             // swap
             judge.addToDeck(0, already, dragInfo.dragFromDeck!.cardIndex);
-          } else {
-            // remove same character other cards from unused
-            const otherCardInfos = characterIdToCardInfos(already.characterId!, already.cardIndex);
-            removeFromUnused(otherCardInfos);
           }
         }
         // add to deck
         judge.addToDeck(0, dragInfo.cardInfo, deckPos.cardIndex);
         setJudge(judge.reconstruct());
-      } else {
-        const otherCardInfos = characterIdToCardInfos(dragInfo.cardInfo.characterId!, dragInfo.cardInfo.cardIndex);
-        removeFromUnused(otherCardInfos);
       }
       setDragInfo(null);
     }
   }
 
-
-
-
-  // render
+  // region render
   return (
     <Box>
       <Box
