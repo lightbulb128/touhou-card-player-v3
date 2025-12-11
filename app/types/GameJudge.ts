@@ -1,3 +1,4 @@
+import { RefObject } from "react";
 import { CharacterId } from "./Configs";
 
 const Alice = 0; // Alice is always the local host
@@ -44,19 +45,30 @@ class CardInfo {
 class PickEvent {
   timestamp: number;
   player: Player;
-  characterId: CharacterId;
+  cardInfo: CardInfo;
 
-  constructor(timestamp: number, player: Player, characterId: CharacterId) {
+  constructor(timestamp: number, player: Player, cardInfo: CardInfo) {
     this.timestamp = timestamp;
     this.player = player;
-    this.characterId = characterId;
+    this.cardInfo = cardInfo;
   }
+
+  characterId(): CharacterId {return this.cardInfo.characterId!}
 };
 
 enum OpponentType {
   None,
   CPU,
   RemotePlayer
+}
+
+type OuterRefObject = {
+  playingOrder: Array<CharacterId>;
+  characterTemporaryDisabled: Map<CharacterId, boolean>;
+  currentCharacterId: CharacterId;
+  setCurrentCharacterId: (id: CharacterId) => void;
+  notifyTurnWinnerDetermined: (winner: Player | null) => void;
+  notifyTurnStarted: (characterId: CharacterId) => void;
 }
 
 class GameJudge {
@@ -72,10 +84,9 @@ class GameJudge {
   };
   turnWinner: Player | null;
   countdownTimeout: NodeJS.Timeout | null;
-  countdownCounter: number;
-  playingOrder: Array<CharacterId>;
-  characterTemporaryDisabled: Map<CharacterId, boolean>;
-  currentCharacterId: CharacterId | null;
+  
+  outerRef: RefObject<OuterRefObject>;
+
   deck: Array<Array<CardInfo>>;
   deckRows: number;
   deckColumns: number;
@@ -89,10 +100,31 @@ class GameJudge {
 
   // used for setState.
   reconstruct(): GameJudge { 
-    return Object.assign(new GameJudge(), this);
+    return Object.assign(new GameJudge(this.outerRef), this);
   }
 
-  constructor() {
+  clearTimeouts(): void {
+    if (this.countdownTimeout !== null) {
+      clearTimeout(this.countdownTimeout);
+      this.countdownTimeout = null;
+    }
+  }
+
+  stopGame(): void {
+    this.clearTimeouts();
+    this.state = GameJudgeState.SelectingCards;
+    this.confirmations = {
+      start: new GameConfirmation(),
+      next: new GameConfirmation(),
+    };
+    this.turnWinner = null;
+    this.turnStartTimestamp = null;
+    this.collectedCards = [[], []];
+    this.pickEvents = [];
+    this.givesLeft = 0;
+  }
+
+  constructor(outerRef: RefObject<OuterRefObject>) {
     this.traditionalMode = false; 
     this.isServer = true;
     this.opponentType = OpponentType.None;
@@ -103,12 +135,9 @@ class GameJudge {
     };
     this.turnWinner = null;
     this.countdownTimeout = null;
-    this.countdownCounter = 0;
-    this.playingOrder = [];
-    this.characterTemporaryDisabled = new Map<CharacterId, boolean>();
-    this.currentCharacterId = null;
-    this.deckRows = 3;
-    this.deckColumns = 8;
+    this.outerRef = outerRef;
+    this.deckRows = 1;
+    this.deckColumns = 6;
     this.deck = [[], []];
     for (let i = 0; i < this.deckRows * this.deckColumns; i++) {
       this.deck[Alice].push(new CardInfo(null, 0));
@@ -173,27 +202,45 @@ class GameJudge {
     return false;
   }
 
+  playingOrder(): Array<CharacterId> {
+    return this.outerRef.current ? this.outerRef.current.playingOrder : [];
+  }
+  characterTemporaryDisabled(): Map<CharacterId, boolean> {
+    return this.outerRef.current ? this.outerRef.current.characterTemporaryDisabled : new Map<CharacterId, boolean>();
+  }
+  currentCharacterId(): CharacterId | null {
+    return this.outerRef.current ? this.outerRef.current.currentCharacterId : null;
+  }
+  g(): OuterRefObject {
+    return this.outerRef.current!;
+  }
+
   nextTurn(): boolean {
-    const count = this.playingOrder.length;
+    console.log("[GameJudge.nextTurn] Moving to next turn.");
+    const playingOrder = this.playingOrder();
+    const characterTemporaryDisabled = this.characterTemporaryDisabled();
+    const currentCharacterId = this.currentCharacterId();
+    const count = playingOrder.length;
     let startId = 0;
-    if (this.currentCharacterId !== null) {
-      const currentIndex = this.playingOrder.indexOf(this.currentCharacterId);
+    if (currentCharacterId !== null) {
+      const currentIndex = playingOrder.indexOf(currentCharacterId);
       startId = (currentIndex + 1) % count;
     }
     let found = false;
     for (let offset = startId; offset < startId + count; offset++) {
       const index = offset % count;
-      const characterId = this.playingOrder[index];
-      const isDisabled = this.characterTemporaryDisabled.get(characterId) || false;
+      const characterId = playingOrder[index];
+      const isDisabled = characterTemporaryDisabled.get(characterId) || false;
       if (!isDisabled) {
-        this.currentCharacterId = characterId;
+        this.g().setCurrentCharacterId(characterId);
         found = true;
+        this.g().notifyTurnStarted(characterId);
         break;
       }
     }
     if (!found) {
       console.warn("[GameJudge.nextTurn] No available character found in playing order.");
-      this.currentCharacterId = null;
+      this.g().setCurrentCharacterId("");
       return false;
     }
     this.state = GameJudgeState.TurnStart;
@@ -208,17 +255,18 @@ class GameJudge {
     return this.opponentType !== OpponentType.None;
   }
 
-  confirmStart(player: Player, refreshCallback: () => void): boolean {
+  confirmStart(player: Player, refreshCallback: (judge: GameJudge) => void): {judgeChanged: boolean, started: boolean} {
     if (this.state !== GameJudgeState.SelectingCards) {
       console.warn(`[GameJudge.confirmStart] [P${player}] Invalid state: ${this.state}`);
-      return false;
+      return {judgeChanged: false, started: false};
     }
     this.confirmations.start.ok[player] = true;
     if (this.confirmations.start.all(this.hasOpponent())) {
       this.confirmations.start = new GameConfirmation();
-      this.countdownNextTurn(refreshCallback);
+      this.countdownNextTurn(refreshCallback, true);
+      return {judgeChanged: true, started: true};
     }
-    return true;
+    return {judgeChanged: true, started: false};
   }
 
   sortPickEvents(): void {
@@ -227,16 +275,17 @@ class GameJudge {
     // check if there are events with the same characterId. if so, keep only the earliest one.
     const seenCharacterIds = new Set<CharacterId>();
     this.pickEvents = this.pickEvents.filter((event) => {
-      if (seenCharacterIds.has(event.characterId)) {
+      if (seenCharacterIds.has(event.characterId())) {
         return false;
       } else {
-        seenCharacterIds.add(event.characterId);
+        seenCharacterIds.add(event.characterId());
         return true;
       }
     });
   }
 
   calculateGivesFromPickEvents(): boolean {
+    const currentCharacterId = this.currentCharacterId();
     if (!this.hasOpponent) {
       this.givesLeft = 0;
       return false;
@@ -249,7 +298,7 @@ class GameJudge {
     let net = 0;
     for (let event of this.pickEvents) {
       // for each wrong pick, if Alice, net - 1, if Bob, net + 1
-      if (event.characterId !== this.currentCharacterId) {
+      if (event.characterId() !== currentCharacterId) {
         if (event.player === Alice) {
           net -= 1;
         } else {
@@ -259,7 +308,7 @@ class GameJudge {
         // for the right pick:
         // if the pick is on the picking player's side of deck, net does not change.
         // otherwise, picker give one card to the opponent
-        const onAliceSide = this.deck[Alice].some(card => card.characterId === event.characterId);
+        const onAliceSide = this.deck[Alice].some(card => card.characterId === event.characterId());
         if (event.player === Alice && !onAliceSide) {
           net += 1;
         }
@@ -268,17 +317,38 @@ class GameJudge {
         }
       }
     }
+    if (net > 0) {
+      // check how many empty slots Bob has. if less than net, limit to that.
+      let emptySlots = 0;
+      for (let cardInfo of this.deck[Bob]) {
+        if (cardInfo.characterId === null) {
+          emptySlots += 1;
+        }
+      }
+      net = Math.min(net, emptySlots);
+    }
+    if (net < 0) {
+      // check how many empty slots Alice has. if less than -net, limit to that.
+      let emptySlots = 0;
+      for (let cardInfo of this.deck[Alice]) {
+        if (cardInfo.characterId === null) {
+          emptySlots += 1;
+        }
+      }
+      net = Math.max(net, -emptySlots);
+    }
     this.givesLeft = net;
     return true;
   }
 
   notifyPickEvent(pickEvent: PickEvent): boolean {
+    const currentCharacterId = this.currentCharacterId();
     this.pickEvents.push(pickEvent);
     this.sortPickEvents();
     // check if the winner is determined (someone picked the current characterId)
     let winnerFound = false;
     for (let event of this.pickEvents) {
-      if (event.characterId === this.currentCharacterId) {
+      if (event.characterId() === currentCharacterId) {
         this.turnWinner = event.player;
         winnerFound = true;
         break;
@@ -292,7 +362,7 @@ class GameJudge {
         let found = null;
         for (let deckPlayer of [Alice, Bob]) {
           for (let cardInfo of this.deck[deckPlayer]) {
-            if (cardInfo.characterId === this.currentCharacterId) {
+            if (cardInfo.characterId === currentCharacterId) {
               this.collectedCards[this.turnWinner].push(cardInfo);
               found = cardInfo;
               break;
@@ -309,6 +379,7 @@ class GameJudge {
         }
       }
     }
+    this.g().notifyTurnWinnerDetermined(this.turnWinner);
     return true;
   }
 
@@ -323,12 +394,6 @@ class GameJudge {
       console.warn(`[GameJudge.moveCard] [P${player}] Failed to add card to deck: ${from.characterId}, ${from.cardIndex}`);
       return false;
     }
-    return true;
-  }
-
-  canConfirmNext(): boolean {
-    if (this.state !== GameJudgeState.TurnWinnerDetermined) { return false; }
-    if (this.givesLeft > 0) { return false; }
     return true;
   }
 
@@ -350,35 +415,22 @@ class GameJudge {
     return true;
   }
 
-  setCountdown(refreshCallback: () => void): void {
+  setNextTurnTimeout(refreshCallback: (judge: GameJudge) => void): void {
     if (this.countdownTimeout !== null) {
       clearTimeout(this.countdownTimeout);
     }
-    this.countdownTimeout = setTimeout(() => {
-      this.countdownCounter -= 1;
-      refreshCallback();
-      if (this.countdownCounter <= 0) {
-        this.countdownTimeout = null;
-        this.nextTurn();
-      } else {
-        this.setCountdown(refreshCallback);
-      }
-    }, 1000);
-  }
-
-  setNextTurnTimeout(refreshCallback: () => void): void {
-    if (this.countdownTimeout !== null) {
-      clearTimeout(this.countdownTimeout);
-    }
-    this.countdownCounter = 3;
     this.state = GameJudgeState.TurnCountdownNext;
-    refreshCallback();
-    this.setCountdown(refreshCallback);
+    refreshCallback(this);
+    // after 3 seconds, call nextTurn
+    this.countdownTimeout = setTimeout(() => {
+      this.nextTurn();
+      refreshCallback(this);
+    }, 3000);
   }
 
-  countdownNextTurn(refreshCallback: () => void): void {
+  countdownNextTurn(refreshCallback: (judge: GameJudge) => void, forceCountDown: boolean = false): void {
     const needTimeout = this.opponentType == OpponentType.RemotePlayer; // only use timeout if there is a remote player
-    if (needTimeout) {
+    if (needTimeout || forceCountDown) {
       this.setNextTurnTimeout(refreshCallback);
       this.state = GameJudgeState.TurnCountdownNext;
     } else {
@@ -386,17 +438,77 @@ class GameJudge {
     }
   }
 
-  confirmNext(player: Player, refreshCallback: () => void): boolean {
-    if (this.state !== GameJudgeState.TurnWinnerDetermined) {
-      console.warn(`[GameJudge.confirmNext] [P${player}] Invalid state: ${this.state}`);
+  canConfirmNext(): boolean {
+    // cannot confirm next only if:
+    // 1) there is a human opponent
+    // 2) there are gives left to process
+    if (this.opponentType === OpponentType.RemotePlayer && this.givesLeft !== 0) {
       return false;
+    }
+    return true;
+  }
+
+  finishTurn(): void {
+    if (this.state === GameJudgeState.TurnWinnerDetermined) {
+      if (this.opponentType === OpponentType.CPU && this.givesLeft != 0) {
+        // process gives arbitrarily for CPU
+        let givesLeft = this.givesLeft;
+        let giver: Player = givesLeft > 0 ? Alice : Bob;
+        let receiver: Player = givesLeft > 0 ? Bob : Alice;
+        givesLeft = Math.abs(givesLeft);
+        while (givesLeft > 0) {
+          const fromIndices: number[] = [];
+          this.deck[giver].forEach((cardInfo, index) => {
+            if (cardInfo.characterId !== null) {
+              fromIndices.push(index);
+            }
+          });
+          const toIndices: number[] = [];
+          this.deck[receiver].forEach((cardInfo, index) => {
+            if (cardInfo.characterId === null) {
+              toIndices.push(index);
+            }
+          });
+          if (fromIndices.length === 0 || toIndices.length === 0) {
+            break;
+          }
+          const fromIndex = fromIndices[Math.floor(Math.random() * fromIndices.length)];
+          const toIndex = toIndices[Math.floor(Math.random() * toIndices.length)];
+          const cardInfo = this.deck[giver][fromIndex];
+          this.moveCard(giver, cardInfo, receiver, toIndex);
+          givesLeft -= 1;
+        }
+      }
+    }
+    if (this.state === GameJudgeState.TurnStart) {
+      // no winner this turn
+      // check if the correct answer is in the deck. if so, remove it.
+      const currentCharacterId = this.currentCharacterId();
+      for (let player of [Alice, Bob]) {
+        for (let i = 0; i < this.deck[player].length; i++) {
+          const cardInfo = this.deck[player][i];
+          if (cardInfo.characterId === currentCharacterId) {
+            // remove from deck
+            this.removeFromDeck(player as Player, cardInfo);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  confirmNext(player: Player, refreshCallback: (judge: GameJudge) => void): {judgeChanged: boolean, nextTurn: boolean} {
+    if (this.confirmations.next.ok[player]) {
+      return {judgeChanged: false, nextTurn: false};
     }
     this.confirmations.next.ok[player] = true;
     if (this.confirmations.next.all(this.hasOpponent())) {
       this.confirmations.next = new GameConfirmation();
+      this.finishTurn();
       this.countdownNextTurn(refreshCallback);
+      return {judgeChanged: true, nextTurn: true};
     }
-    return true;
+    return {judgeChanged: true, nextTurn: false};
   }
 
 }
@@ -407,4 +519,8 @@ export {
   CardInfo,
   PickEvent,
   OpponentType,
+};
+export type {
+  OuterRefObject,
+  Player,
 };

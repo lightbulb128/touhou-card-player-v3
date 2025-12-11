@@ -12,6 +12,8 @@ export interface GameButtonProps {
   sx?: SxProps;
   onClick?: () => void;
   children?: React.ReactNode;
+  bordered?: boolean;
+  size?: "small" | "medium" | "large";
 }
 
 export function GameButton({
@@ -30,6 +32,15 @@ export function GameButton({
   if (props.textWidth === undefined) {
     props.textWidth = "auto";
   }
+  if (props.hidden === undefined) {
+    props.hidden = false;
+  }
+  if (props.bordered === undefined) {
+    props.bordered = true;
+  }
+  if (props.size === undefined) {
+    props.size = "small";
+  }
   return (
     <Stack 
       direction={props.textOnLeft ? "row-reverse" : "row"}
@@ -37,12 +48,11 @@ export function GameButton({
       sx={{
         cursor: props.disabled ? "default" : "pointer",
         userSelect: "none",
-        transition: "height 0.2s ease, left 0.2s ease, top 0.2s ease, padding-bottom 0.2s ease",
+        transition: "left 0.2s ease, top 0.2s ease, opacity 0.2s ease",
         // align vertically center
         alignItems: "center",
-        height: props.hidden ? "0px" : "42px",
         overflow: "hidden",
-        paddingBottom: props.hidden ? "0px" : "6px",
+        opacity: props.hidden ? 0 : 1,
         ...props.sx
       }}
     >
@@ -50,9 +60,11 @@ export function GameButton({
         onClick={props.onClick} disabled={props.disabled}
         color={props.color || "primary"}
         sx={{
-          border: props.disabled ? "1px solid rgba(0,0,0,0.12)" : "1px solid",
+          border: props.bordered ? (
+            props.disabled ? "1px solid rgba(0,0,0,0.12)" : "1px solid"
+          ) : "none",
         }}
-        size="small"
+        size={props.size}
       >
         {props.children}
       </IconButton>

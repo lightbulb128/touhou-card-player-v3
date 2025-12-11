@@ -25,7 +25,10 @@ function TabContainer({
     sx={{ width: "100%", paddingLeft: 2, paddingRight: 2 }}
   >
     <Paper
-      sx={{ padding: 2, width: "100%", overflow: "hidden" }}
+      sx={{ 
+        padding: 2, width: "100%", overflow: "hidden",
+        backgroundColor: "#eef8ff"
+      }}
     >
       {children}
     </Paper>
@@ -53,6 +56,7 @@ export default function Home() {
   })
   const [pauseTimeoutHandle, setPauseTimeoutHandle] = useState<NodeJS.Timeout | null>(null);
   const [playbackState, setPlaybackState] = useState<PlaybackState>(PlaybackState.Stopped);
+  const [outOfGameUseCountdown, setOutOfGameUseCountdown] = useState<boolean>(false);
 
   // region utility funcs
   const getMusicId = (character: CharacterId): MusicUniqueId | null => {
@@ -281,28 +285,47 @@ export default function Home() {
     }
   }
 
-  const handleGameStart = () => {
+  const handleGameStart = (playingOrder: Array<CharacterId> | null) => {
     const newTemporaryDisabled = new Map<CharacterId, boolean>();
-    const newOrder = createPlayingOrder(
+    const newOrder = playingOrder ? playingOrder : createPlayingOrder(
       globalData, musicSelection, newTemporaryDisabled, true
     );
     setCharacterTemporaryDisabled(newTemporaryDisabled);
     setPlayingOrder(newOrder);
     setCurrentCharacterId(newOrder.length > 0 ? newOrder[newOrder.length - 1] : "");
-    handlePause();
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+    }
+    setPlaybackState(PlaybackState.Stopped);
+  }
+
+  const playCountdownAudio = () => {
+    if (countdownAudioElementRef.current) {
+      countdownAudioElementRef.current.currentTime = 0;
+      countdownAudioElementRef.current.play();
+    }
   }
 
   // region render
-  const tabButton = (id: number, name: string) => {
+  const tabButton = (id: number, name: string, onClick?: () => void) => {
     return (
       <Button
         key={name}
         variant={activeTab === id ? "contained" : "outlined"}
-        onClick={() => setActiveTab(id)}
+        onClick={() => {
+          setActiveTab(id);
+          if (onClick) onClick();
+        }}
       >
         {name}
       </Button>
     );
+  }
+
+  const reloadOutOfGameCountdown = () => {
+    setPlaybackSetting((original) => {
+      return { ...original, countdown: outOfGameUseCountdown };
+    });
   }
 
   return (
@@ -341,10 +364,15 @@ export default function Home() {
           width: "100%", alignItems: "center", paddingTop: 2
         }}>
           <Stack direction="row" spacing={2}>
-            {tabButton(0, "Player")}
-            {tabButton(1, "List")}
-            {tabButton(2, "Configs")}
-            {tabButton(3, "Practice")}
+            {tabButton(0, "Player", reloadOutOfGameCountdown)}
+            {tabButton(1, "List", reloadOutOfGameCountdown)}
+            {tabButton(2, "Configs", reloadOutOfGameCountdown)}
+            {tabButton(3, "Practice", () => {
+              setOutOfGameUseCountdown(playbackSetting.countdown);
+              setPlaybackSetting((original) => {
+                return { ...original, countdown: false };
+              });
+            })}
           </Stack>
           <CustomTabs activeTab={activeTab} onChange={setActiveTab} innerTabs={[
             <TabContainer>
@@ -398,7 +426,12 @@ export default function Home() {
                 characterTemporaryDisabled={characterTemporaryDisabled}
                 currentCharacterId={currentCharacterId}
                 playingOrder={playingOrder}
+                playback={playback}
+                notifyPauseMusic={handlePause}
+                notifyPlayMusic={handlePlay}
+                playbackState={playbackState}
                 notifyGameStart={handleGameStart}
+                notifyPlayCountdownAudio={playCountdownAudio}
                 setCurrentCharacterId={setCurrentCharacterId}
               ></GameTab>
             </TabContainer>

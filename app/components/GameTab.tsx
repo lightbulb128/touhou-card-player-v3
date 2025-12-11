@@ -6,10 +6,11 @@ import {
   PlaybackState, CardAspectRatio
 } from "../types/Configs";
 import { useState, useEffect, JSX, useRef } from "react";
-import { CardInfo, GameJudge, GameJudgeState, OpponentType } from "../types/GameJudge";
+import { CardInfo, GameJudge, GameJudgeState, OpponentType, OuterRefObject, PickEvent, Player } from "../types/GameJudge";
 import { CardBackgroundState, CharacterCard } from "./CharacterCard";
 import {
-  SkipNextRounded, PlayArrowRounded, EastRounded, WestRounded,
+  SkipNextRounded, PauseRounded, PlayArrowRounded, EastRounded, WestRounded,
+  StopRounded,
   AddRounded, RemoveRounded
 } from "@mui/icons-material";
 import { GameButton } from "./GameTabControls";
@@ -21,7 +22,12 @@ export interface GameTabProps {
   currentCharacterId: CharacterId;
   characterTemporaryDisabled: Map<CharacterId, boolean>;
   playingOrder: Array<CharacterId>;
-  notifyGameStart: () => void;
+  playback: Playback,
+  playbackState: PlaybackState,
+  notifyGameStart: (playingOrder: Array<CharacterId> | null) => void;
+  notifyPauseMusic: () => void;
+  notifyPlayMusic: () => void;
+  notifyPlayCountdownAudio: () => void;
   setCurrentCharacterId: (characterId: CharacterId) => void;
 }
 
@@ -62,6 +68,13 @@ type DragInfo = {
   dragType: "fromSelectable" | "fromDeck";
   dragFromDeck: { deckIndex: 0 | 1; cardIndex: number } | null;
 }
+type TimerType = "countdown" | "running" | "paused" | "zero";
+type TimerState = {
+  type: TimerType;
+  referenceTimestamp: number;
+  time: number;
+  intervalHandle: NodeJS.Timeout | null;
+}
 
 function getCardTransitionString(duration: string): string {
   return `top ${duration}, left ${duration}, transform ${duration}, background-color ${duration}, width ${duration}, height ${duration}`;
@@ -73,20 +86,45 @@ export default function GameTab({
   currentCharacterId, 
   characterTemporaryDisabled,
   playingOrder,
+  playback,
+  playbackState,
   notifyGameStart,
+  notifyPauseMusic,
+  notifyPlayMusic,
+  notifyPlayCountdownAudio,
   setCurrentCharacterId
 }: GameTabProps) {
 
   // region states
+  const outerref = useRef<OuterRefObject>({
+    playingOrder: playingOrder,
+    characterTemporaryDisabled: characterTemporaryDisabled,
+    currentCharacterId: currentCharacterId,
+    setCurrentCharacterId: setCurrentCharacterId,
+    notifyTurnWinnerDetermined: (winner: Player | null) => {},
+    notifyTurnStarted: (characterId: CharacterId) => {}
+  });
   const [, setForceRerender] = useState<{}>({}); // used to force re-render
-  const forceRerender = (): void => { setForceRerender({}); };
-  const [judge, setJudge] = useState<GameJudge>(new GameJudge());
+  const [judge, setJudge] = useState<GameJudge>(new GameJudge(outerref));
   const [cardWidthPercentage, setCardWidthPercentage] = useState<number>(0.08);
   const [cardSelectionSliderValue, setCardSelectionSliderValue] = useState<number>(0);
   const [unusedCards, setUnusedCards] = useState<CardInfo[]>([]);
   const [hoveringCardInfo, setHoveringCardInfo] = useState<CardInfo | null>(null);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
+  const [timerState, setTimerState] = useState<TimerState>({ 
+    type: "zero", referenceTimestamp: 0, time: 0,
+    intervalHandle: null
+  });
+  const forceRerender = (judge: GameJudge): void => { 
+    console.log("force rerender");
+    setJudge(judge.reconstruct());
+  };
   const containerRef = useRef<HTMLDivElement>(null);
+  const gref = useRef<{
+    timerState: TimerState
+  }>({
+    timerState: timerState
+  });
 
   const playOrderSet = new Set(playingOrder);
   const cards: Map<string, CardRenderProps> = new Map();
@@ -94,6 +132,7 @@ export default function GameTab({
   const naturalCardOrder: Array<CardInfo> = new Array<CardInfo>();
   const cardInsideDeck: Set<string> = new Set();
   const characterInsideDeck: Set<CharacterId> = new Set();
+  const cardInsideCollected: Set<string> = new Set();
 
   const canvasSpacing = 6;
   const canvasMargin = 16;
@@ -106,7 +145,6 @@ export default function GameTab({
   const deckHeight = deckRows * cardHeight + (deckRows - 1) * canvasSpacing;
   const deckLeft = (canvasWidth - deckWidth) / 2;
   const deckRight = deckLeft + deckWidth;
-  const buttonSize = 48;
   const sliderHeight = 28;
   let middleBarTop = canvasMargin;
   let middleBarHeight = 0;
@@ -116,7 +154,7 @@ export default function GameTab({
   if (judge.state === GameJudgeState.SelectingCards) {
     middleBarHeight = cardHeight + canvasSpacing + sliderHeight;
   } else {
-    middleBarHeight = 48;
+    middleBarHeight = 80;
   }
   const middleBarBottom = middleBarTop + middleBarHeight;
   const playerDeckTop = middleBarBottom + canvasSpacing;
@@ -150,6 +188,11 @@ export default function GameTab({
         characterInsideDeck.add(cardInfo.characterId);
       }
     })
+  });
+  judge.collectedCards.forEach((c) => {
+    c.forEach((cardInfo) => {
+      cardInsideCollected.add(cardInfo.toKey());
+    });
   });
   
   // region utility funcs
@@ -198,13 +241,23 @@ export default function GameTab({
       if (musicIndex === -1) {
         return true;
       }
-      if (dragInfo) {
-        if (dragInfo.cardInfo.characterId === characterId && dragInfo.cardInfo.cardIndex !== cardInfo.cardIndex) {
+      if (judge.state !== GameJudgeState.SelectingCards) {
+        // all that is not in {deck, collected} is unused
+        if (cardInsideDeck.has(cardInfo.toKey()) || cardInsideCollected.has(cardInfo.toKey())) {
+          return false;
+        } else {
           return true;
         }
       }
-      if (characterInsideDeck.has(characterId) && !cardInsideDeck.has(cardInfo.toKey())) {
-        return true;
+      if (judge.state === GameJudgeState.SelectingCards) {
+        if (dragInfo) {
+          if (dragInfo.cardInfo.characterId === characterId && dragInfo.cardInfo.cardIndex !== cardInfo.cardIndex) {
+            return true;
+          }
+        }
+        if (characterInsideDeck.has(characterId) && !cardInsideDeck.has(cardInfo.toKey())) {
+          return true;
+        }
       }
       return false;
     };
@@ -243,18 +296,88 @@ export default function GameTab({
     }
   }
 
+  const timerTextStartCountdown = () => {
+    console.log("start countdown");
+    setTimerState((timerState) => ({
+      ...timerState,
+      type: "countdown",
+      referenceTimestamp: Date.now(),
+      time: 0,
+    }));
+  }
+
+  const timerTextStartRunning = () => {
+    console.log("start running");
+    setTimerState((timerState) => ({
+      ...timerState,
+      type: "running",
+      referenceTimestamp: Date.now(),
+      time: 0,
+    }));
+  }
+
+  const timerTextPause = () => {
+    console.log("pause timer");
+    setTimerState((timerState) => ({
+      ...timerState,
+      type: "paused",
+    }));
+  }
+
   // region use effects
+
   useEffect(() => {
-    judge.playingOrder = playingOrder;
-    judge.characterTemporaryDisabled = characterTemporaryDisabled;
-    judge.currentCharacterId = currentCharacterId;
-    setJudge(judge.reconstruct());
+    gref.current.timerState = timerState;
+  }, [timerState]);
+
+  useEffect(() => {
+    const handle = setInterval(() => {
+      const timerState = gref.current.timerState;
+      switch (timerState.type) {
+        case "countdown": {
+          const deltaTime = Date.now() - timerState.referenceTimestamp;
+          const newTime = 3 - Math.floor(deltaTime / 1000);
+          if (newTime <= 0) {
+            // setTimerState((timerState) => ({
+            //   ...timerState,
+            //   type: "zero",
+            //   time: 0,
+            // }));
+          } else {
+            setTimerState((timerState) => ({
+              ...timerState,
+              time: newTime,
+            }));
+          }
+          break;
+        }
+        case "running": {
+          const deltaTime = Date.now() - timerState.referenceTimestamp;
+          const newTime = deltaTime / 1000;
+          setTimerState((timerState) => ({
+            ...timerState,
+            time: newTime,
+          }));
+          break;
+        }
+        // default:
+        //   setTimerState((timerState) => ({ ...timerState })); // trigger re-render
+      }
+    }, 20);
+    setTimerState((timerState) => ({ ...timerState, intervalHandle: handle }));
+    return () => { clearInterval(handle); }
+  }, []);
+
+  useEffect(() => {
+    outerref.current.playingOrder = playingOrder;
+    outerref.current.characterTemporaryDisabled = characterTemporaryDisabled;
+    outerref.current.currentCharacterId = currentCharacterId;
   }, [playingOrder, characterTemporaryDisabled, currentCharacterId]);
 
   useEffect(() => {
     // resize
     const handleResize = () => {
-      forceRerender();
+      setForceRerender({})
     };
     window.addEventListener('resize', handleResize);
     handleResize();
@@ -267,12 +390,6 @@ export default function GameTab({
   useEffect(() => {
     updateUnusedCards();
   }, [data, musicSelection, judge, dragInfo]);
-
-  useEffect(() => {
-    if (judge.currentCharacterId !== null && judge.currentCharacterId !== currentCharacterId) {
-      setCurrentCharacterId(judge.currentCharacterId);
-    }
-  }, [judge.currentCharacterId])
   
   // calculate anchor positions
   const toDeckCardPosition = (deckIndex: 0 | 1, cardIndex: number): Position => {
@@ -291,50 +408,55 @@ export default function GameTab({
     }
   }
 
-  // create all cards
+  // region render cards
 
-  // Alice deck
-  judge.deck[0].forEach((cardInfo, index) => {
-    placeholderCards.push({
-      ...toDeckCardPosition(0, index),
-      hidden: cardInfo.characterId !== null
-    });
-    if (cardInfo.characterId !== null) {
-      const cardKey = cardInfo.toKey();
-      const cardProps = cards.get(cardKey);
-      if (cardProps === undefined) return;
-      const pos = toDeckCardPosition(0, index);
-      cardProps.x = pos.x;
-      cardProps.y = pos.y;
-      if (judge.state === GameJudgeState.SelectingCards) {
-        cardProps.onMouseEnter = () => {
-          setHoveringCardInfo(cardInfo);
-        };
-        cardProps.onMouseLeave = () => {
-          setHoveringCardInfo(null);
-        };
-      }
+  judge.deck.forEach((deck, di) => {
+    const deckIndex = di as 0 | 1;
+    if (deckIndex === 1 && judge.opponentType === OpponentType.None) {
+      return;
     }
-  });
-
-  // Bob deck
-  if (judge.opponentType !== OpponentType.None) {
-    judge.deck[1].forEach((cardInfo, index) => {
+    deck.forEach((cardInfo, index) => {
       placeholderCards.push({
-        ...toDeckCardPosition(1, index),
+        ...toDeckCardPosition(deckIndex, index),
         hidden: cardInfo.characterId !== null
       });
       if (cardInfo.characterId !== null) {
         const cardKey = cardInfo.toKey();
         const cardProps = cards.get(cardKey);
         if (cardProps === undefined) return;
-        const pos = toDeckCardPosition(1, index);
+        const pos = toDeckCardPosition(deckIndex, index);
         cardProps.x = pos.x;
         cardProps.y = pos.y;
-        cardProps.upsideDown = true;
+        cardProps.zIndex = 200;
+        if (deckIndex === 1) { cardProps.upsideDown = true; }
+        if (judge.state === GameJudgeState.SelectingCards) {
+          cardProps.onMouseEnter = () => {
+            setHoveringCardInfo(cardInfo);
+          };
+          cardProps.onMouseLeave = () => {
+            setHoveringCardInfo(null);
+          };
+        }
+        if (judge.state === GameJudgeState.TurnStart) {
+          cardProps.onClick = () => {
+            judge.notifyPickEvent(new PickEvent(
+              Date.now(), 0, cardInfo,
+            ))
+            setJudge(judge.reconstruct());
+          };
+        }
       }
     });
-  }
+  });
+
+  judge.pickEvents.forEach((pickEvent) => {
+    if (pickEvent.cardInfo.characterId === null) return;
+    const cardKey = pickEvent.cardInfo.toKey();
+    const cardProps = cards.get(cardKey);
+    if (cardProps === undefined) return;
+    const correct = pickEvent.characterId() === currentCharacterId;
+    cardProps.backgroundState = correct ? CardBackgroundState.Correct : CardBackgroundState.Incorrect;
+  });
 
   const selectableCardKeys: Array<CardInfo> = [];
   if (judge.state === GameJudgeState.SelectingCards) {
@@ -454,7 +576,6 @@ export default function GameTab({
             dragFromDeck: null,
           });
           // add other cards of the same character to unused
-          const otherCardInfos = characterIdToCardInfos(cardInfo.characterId!, cardInfo.cardIndex);
           break;
         }
       }
@@ -587,14 +708,310 @@ export default function GameTab({
   }
 
   const handleStartGame = () => {
-    notifyGameStart();
+    notifyGameStart(null);
+    notifyPlayCountdownAudio();
     judge.confirmStart(0, forceRerender);
+    timerTextStartCountdown();
     setJudge(judge.reconstruct());
   }
+
+  const handleStopGame = () => {
+    judge.state = GameJudgeState.SelectingCards;
+    judge.stopGame();
+    setJudge(judge.reconstruct());
+    setDragInfo(null);
+    setHoveringCardInfo(null);
+  }
+
+  const notifyTurnStarted = () => {
+    timerTextStartRunning();
+  }
+  outerref.current.notifyTurnStarted = notifyTurnStarted;
+
+  const notifyTurnWinnerDetermined = () => {
+    timerTextPause();
+  }
+  outerref.current.notifyTurnWinnerDetermined = notifyTurnWinnerDetermined;
 
   // const handleAddDeck
 
   // region render
+
+  const otherElements: Array<JSX.Element> = [];
+  const buttonSize = 36;
+
+  // region r - buttons
+  
+  // player deck right
+  {
+    let y = playerDeckTop;
+    const x = deckRight + canvasMargin;
+    { // card smaller button
+      const disabled = cardWidthPercentage <= cardWidthPercentageMin;
+      otherElements.push(
+        <GameButton 
+          key="card-smaller-button" 
+          text="Card Smaller" 
+          onClick={handleCardSmaller} 
+          disabled={disabled} 
+          sx={{ 
+            position: "absolute", left: `${x}px`, top: `${y}px`, 
+          }}
+        >
+          <WestRounded></WestRounded>
+        </GameButton>
+      );
+      y += buttonSize + canvasSpacing;
+    }
+    { // card larger button
+      const disabled = cardWidthPercentage >= cardWidthPercentageMax;
+      otherElements.push(
+        <GameButton 
+          key="card-larger-button" 
+          text="Card Larger" 
+          onClick={handleCardLarger} 
+          disabled={disabled} 
+          sx={{ 
+            position: "absolute", left: `${x}px`, top: `${y}px`, 
+          }}
+        >
+          <EastRounded></EastRounded>
+        </GameButton>
+      );
+      y += buttonSize + canvasSpacing;
+    }
+    { // start button
+      const isStopGameButton = judge.state !== GameJudgeState.SelectingCards;
+      otherElements.push(
+        <GameButton 
+          key="start-button"
+          text="Start"
+          disabled={!isStopGameButton && !canStartGame()}
+          onClick={isStopGameButton ? handleStopGame : handleStartGame}
+          sx={{ 
+            position: "absolute", left: `${x}px`, top: `${y}px`, 
+          }}
+        >
+          {!isStopGameButton && <PlayArrowRounded></PlayArrowRounded>}
+          {isStopGameButton && <StopRounded></StopRounded>}
+        </GameButton>
+      );
+      y += buttonSize + canvasSpacing;
+    }
+    { // remove row button
+      const hidden = judge.state !== GameJudgeState.SelectingCards;
+      const normalY = playerDeckTop + deckHeight - buttonSize * 2 - canvasSpacing;
+      if (normalY > y) { y = normalY; }
+      otherElements.push(
+        <GameButton 
+          key="remove-deck-row-button"
+          onClick={removeDeckRow}
+          disabled={judge.deckRows <= 1}
+          hidden={hidden}
+          sx={{ 
+            position: "absolute", left: `${x}px`, top: `${y}px`, 
+          }}
+        >
+          <RemoveRounded></RemoveRounded>
+        </GameButton>
+      );
+      if (!hidden) y += buttonSize + canvasSpacing;
+    }
+    { // add row button
+      const hidden = judge.state !== GameJudgeState.SelectingCards;
+      otherElements.push(
+        <GameButton 
+          key="add-deck-row-button"
+          onClick={addDeckRow}
+          disabled={judge.deckRows >= maxDeckRows}
+          hidden={hidden}
+          sx={{ 
+            position: "absolute", left: `${x}px`, top: `${y}px`, 
+          }}
+        >
+          <AddRounded></AddRounded>
+        </GameButton>
+      );
+      if (!hidden) y += buttonSize + canvasSpacing;
+    }
+  }
+
+  // player deck bottom
+  {
+    const y = playerDeckTop + deckHeight + canvasMargin;
+    let x = deckLeft + deckWidth - buttonSize;
+    { // add column button
+      const hidden = judge.state !== GameJudgeState.SelectingCards;
+      otherElements.push(
+        <GameButton 
+          key="add-deck-column-button"
+          onClick={addDeckColumn}
+          disabled={judge.deckColumns >= maxDeckColumns}
+          hidden={hidden}
+          sx={{ 
+            position: "absolute", left: `${x}px`, top: `${y}px`, 
+          }}
+        >
+          <AddRounded></AddRounded>
+        </GameButton>
+      );
+      if (!hidden) x -= buttonSize + canvasSpacing;
+    }
+    { // remove column button
+      const hidden = judge.state !== GameJudgeState.SelectingCards;
+      otherElements.push(
+        <GameButton 
+          key="remove-deck-column-button"
+          onClick={removeDeckColumn}
+          disabled={judge.deckColumns <= 1}
+          hidden={hidden}
+          sx={{ 
+            position: "absolute", left: `${x}px`, top: `${y}px`, 
+          }}
+        >
+          <RemoveRounded></RemoveRounded>
+        </GameButton>
+      );
+      if (!hidden) x -= buttonSize + canvasSpacing;
+    }
+  }
+
+  if (judge.state !== GameJudgeState.SelectingCards) { // middlebar
+    const timerTextWidth = 150;
+    const textHeight = 30;
+    const buttonSize = 47;
+    let x = deckLeft;
+    const y = middleBarTop;
+    {
+      let text = "";
+      switch (timerState.type) {
+        case "countdown":
+          text = timerState.time.toFixed(0)
+          break;
+        case "running":
+          text = timerState.time.toFixed(2)
+          break;
+        case "paused":
+          text = timerState.time.toFixed(2)
+          break;
+        case "zero":
+          text = "0"
+          break;
+      }
+      otherElements.push(
+        <Box
+          key="game-timer-box"
+          sx={{
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            width: `${timerTextWidth}px`,
+            height: `${middleBarHeight}px`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#ffeeee",
+            transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease",
+          }}
+        >
+        <Typography variant="h3">{text}</Typography> 
+      </Box>
+      );
+      x += timerTextWidth + canvasSpacing;
+    }
+    {
+      const musicInfo = getMusicInfoFromCharacterId(data, musicSelection, currentCharacterId);
+      const hidden = judge.state !== GameJudgeState.TurnWinnerDetermined;
+      const width = deckWidth - (timerTextWidth + 3 * canvasSpacing + buttonSize * 2);
+      otherElements.push(
+        <Typography 
+          variant="h6"
+          sx={{
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y + middleBarHeight / 2}px`,
+            transform: "translateY(-100%)",
+            width: `${width}px`,
+            opacity: hidden ? 0.0 : 1.0,
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease",
+          }}
+        >
+          {currentCharacterId} / {musicInfo?.title}
+        </Typography>
+      );
+      otherElements.push(
+        <Typography 
+          variant="subtitle1"
+          sx={{
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y + middleBarHeight / 2}px`,
+            textOverflow: "ellipsis",
+            width: `${width}px`,
+            opacity: hidden ? 0.0 : 1.0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease",
+          }}
+        >
+          {musicInfo?.album}
+        </Typography>
+      );
+      x = deckRight - buttonSize * 2 - canvasSpacing;
+    }
+    { // play/pause button
+      const isPlay = playbackState !== PlaybackState.Playing;
+      const isDisabled = playbackState === PlaybackState.CountingDown;
+      const buttonY = y + middleBarHeight / 2 - buttonSize / 2;
+      otherElements.push(
+        <GameButton 
+          key="play-pause-button"
+          disabled={isDisabled}
+          sx={{ 
+            position: "absolute", left: `${x}px`, top: `${buttonY}px`,
+          }}
+          onClick={
+            isPlay ? notifyPlayMusic : notifyPauseMusic
+          }
+        >
+          {isPlay && <PlayArrowRounded fontSize="large"></PlayArrowRounded>}
+          {!isPlay && <PauseRounded fontSize="large"></PauseRounded>}
+        </GameButton>
+      );
+      x += buttonSize + canvasSpacing;
+    }
+    { // next turn button
+      const clickable = true;
+      const buttonY = y + middleBarHeight / 2 - buttonSize / 2;
+      otherElements.push(
+        <GameButton
+          key="next-turn-button"
+          disabled={!clickable}
+          sx={{
+            position: "absolute", left: `${x}px`, top: `${buttonY}px`,
+          }}
+          onClick={() => {
+            const ret = judge.confirmNext(0, forceRerender);
+            if (ret.nextTurn) {
+              if (judge.opponentType === OpponentType.RemotePlayer) {
+                notifyPlayCountdownAudio();
+                timerTextStartCountdown();
+              }
+            }
+            if (ret.judgeChanged) {
+              setJudge(judge.reconstruct());
+            }
+          }}
+        >
+          <SkipNextRounded fontSize="large"></SkipNextRounded>
+        </GameButton>
+      );
+    }
+  }
+
   return (
     <Box>
       <Box
@@ -648,6 +1065,7 @@ export default function GameTab({
             }}
             onMouseEnter={cardProps.onMouseEnter}
             onMouseLeave={cardProps.onMouseLeave}
+            onClick={cardProps.onClick}
           />
         })}
         {placeholderCards.map((pos, index) => {
@@ -680,68 +1098,8 @@ export default function GameTab({
           Unused cards
         </Typography>
 
-        {/* Buttons on the right of the player deck */}
-        <Stack 
-          direction="column" spacing={0}
-          sx={{
-            position: "absolute",
-            left: `${deckRight + canvasMargin}px`,
-            top: `${playerDeckTop}px`,
-            transition: "top 0.3s ease, left 0.3s ease",
-          }}
-        >
-          <GameButton text="Card Smaller" onClick={handleCardSmaller} disabled={cardWidthPercentage <= cardWidthPercentageMin}>
-            <WestRounded></WestRounded>
-          </GameButton>
-          <GameButton text="Card Larger" onClick={handleCardLarger} disabled={cardWidthPercentage >= cardWidthPercentageMax}>
-            <EastRounded></EastRounded>
-          </GameButton>
-          <GameButton text="Start" 
-            hidden={judge.state !== GameJudgeState.SelectingCards}
-            disabled={!canStartGame()}
-            onClick={handleStartGame}
-          >
-            <PlayArrowRounded></PlayArrowRounded>
-          </GameButton>
-        </Stack>
+        {otherElements.map((element) => element)}
 
-        {/* Add/remove deck row, on the right-bottom of the player deck */}
-        <Stack 
-          direction="column" spacing={0}
-          sx={{
-            position: "absolute",
-            left: `${deckRight + canvasMargin}px`,
-            top: `${Math.max(playerDeckTop + deckHeight, playerDeckTop + 210)}px`,
-            transition: "top 0.3s ease, left 0.3s ease",
-            transform: "translateY(-100%)",
-          }}
-        >
-          <GameButton disabled={judge.deckRows <= 1} onClick={removeDeckRow}>
-            <RemoveRounded></RemoveRounded>
-          </GameButton>
-          <GameButton disabled={judge.deckRows >= maxDeckRows} onClick={addDeckRow}>
-            <AddRounded></AddRounded>
-          </GameButton>
-        </Stack>
-
-        {/* Add/remove deck column, on the bottom-right of the player deck */}
-        <Stack 
-          direction="row" spacing={"6px"}
-          sx={{
-            position: "absolute",
-            left: `${deckRight}px`,
-            top: `${playerDeckTop + deckHeight + canvasMargin}px`,
-            transition: "top 0.3s ease, left 0.3s ease",
-            transform: "translateX(-100%)",
-          }}
-        >
-          <GameButton disabled={judge.deckColumns <= 1} onClick={removeDeckColumn}>
-            <RemoveRounded></RemoveRounded>
-          </GameButton>
-          <GameButton disabled={judge.deckColumns >= maxDeckColumns} onClick={addDeckColumn}>
-            <AddRounded></AddRounded>
-          </GameButton>
-        </Stack>
       </Box>
     </Box>
   )
