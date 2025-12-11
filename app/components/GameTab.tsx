@@ -133,24 +133,28 @@ export default function GameTab({
   const cardInsideDeck: Set<string> = new Set();
   const characterInsideDeck: Set<CharacterId> = new Set();
   const cardInsideCollected: Set<string> = new Set();
+  const otherElements: Array<JSX.Element> = [];
 
   const canvasSpacing = 6;
   const canvasMargin = 16;
-  const opponentDeckTop = canvasMargin;
-  const deckColumns = judge.deckColumns; const deckRows = judge.deckRows;
   const canvasWidth = (containerRef.current ? containerRef.current.clientWidth : 800) - canvasMargin * 2;
   const cardWidth = canvasWidth * cardWidthPercentage;
   const cardHeight = cardWidth / CardAspectRatio;
+  const hasOpponent = judge.opponentType !== OpponentType.None;
+  const opponentCollectedTop = canvasMargin;
+  let opponentDeckTop = canvasMargin;
+  if (hasOpponent && judge.state !== GameJudgeState.SelectingCards) {
+    opponentDeckTop += cardHeight + canvasSpacing + canvasMargin;
+  }
+  const deckColumns = judge.deckColumns; const deckRows = judge.deckRows;
   const deckWidth = deckColumns * cardWidth + (deckColumns - 1) * canvasSpacing;
   const deckHeight = deckRows * cardHeight + (deckRows - 1) * canvasSpacing;
+  const opponentDeckBottom = opponentDeckTop + (hasOpponent ? deckHeight : 0);
   const deckLeft = (canvasWidth - deckWidth) / 2;
   const deckRight = deckLeft + deckWidth;
   const sliderHeight = 28;
-  let middleBarTop = canvasMargin;
+  let middleBarTop = opponentDeckBottom + (hasOpponent ? canvasSpacing : 0);
   let middleBarHeight = 0;
-  if (judge.opponentType !== OpponentType.None) {
-    middleBarTop += deckHeight + canvasSpacing;
-  }
   if (judge.state === GameJudgeState.SelectingCards) {
     middleBarHeight = cardHeight + canvasSpacing + sliderHeight;
   } else {
@@ -158,6 +162,8 @@ export default function GameTab({
   }
   const middleBarBottom = middleBarTop + middleBarHeight;
   const playerDeckTop = middleBarBottom + canvasSpacing;
+  const playerDeckBottom = playerDeckTop + deckHeight;
+  const playerCollectedTop = playerDeckBottom + canvasSpacing + canvasMargin;
   const cardSelectionOverlap = cardWidth * 0.3;
 
   data.characterConfigs.forEach((characterConfig, characterId) => {
@@ -490,6 +496,61 @@ export default function GameTab({
     });
   }
 
+  if (judge.state !== GameJudgeState.SelectingCards) {
+    judge.collectedCards.forEach((d, playerId) => {
+      if (playerId === 1 && judge.opponentType === OpponentType.None) { return; }
+      const y = (playerId === 0) ? playerCollectedTop : opponentCollectedTop;
+      const startX = (playerId === 0) ? (canvasWidth - canvasMargin - cardWidth * 2 - canvasSpacing) : (canvasMargin + cardWidth + canvasSpacing);
+      // add a text element
+      {
+        const textLeft = (playerId === 0) ? (canvasWidth - canvasMargin - cardWidth) : canvasMargin;
+        otherElements.push(
+          <Box
+            key={`collected-text-${playerId}`}
+            sx={{
+              position: "absolute",
+              left: `${textLeft}px`,
+              top: `${y}px`,
+              width: `${cardWidth}px`,
+              height: `${cardHeight}px`,
+              textAlign: "center",
+              pointerEvents: "none",
+              alignItems: "center",
+              justifyContent: "center",
+              display: "flex",
+            }}
+          >
+           <Typography variant="h3" sx={{ userSelect: "none" }}>
+              {d.length}
+            </Typography> 
+          </Box>
+        );
+      }
+      if (d.length === 0) { return; }
+      const totalWidth = canvasWidth - canvasMargin * 2 - cardWidth * 2 - canvasSpacing;
+      let delta = d.length === 1 ? 0 : totalWidth / (d.length - 1);
+      if (delta > cardWidth * 0.66) { delta = cardWidth * 0.66; }
+      if (playerId === 0) {delta = -delta;}
+      d.forEach((cardInfo, index) => {
+        const cardKey = cardInfo.toKey();
+        const cardProps = cards.get(cardKey);
+        if (cardProps === undefined) return;
+        cardProps.x = startX + delta * index;
+        cardProps.y = y;
+        cardProps.zIndex = index;
+        cardProps.onMouseEnter = () => {
+          setHoveringCardInfo(cardInfo);
+        };
+        cardProps.onMouseLeave = () => {
+          setHoveringCardInfo(null);
+        };
+        if (hoveringCardInfo !== null && hoveringCardInfo.toKey() === cardInfo.toKey()) {
+          cardProps.y += (playerId === 0) ? -16 : 16;
+        }
+      });
+    });
+  }
+
   // hovering when selecting
   if (judge.state === GameJudgeState.SelectingCards && hoveringCardInfo !== null && dragInfo === null) {
     const hoveringKey = hoveringCardInfo.toKey();
@@ -499,6 +560,14 @@ export default function GameTab({
       if (!cardInsideDeck.has(hoveringKey)) {
         props.y -= 16;
       }
+    }
+  }
+  if (judge.state !== GameJudgeState.SelectingCards && hoveringCardInfo !== null && dragInfo === null) {
+    const hoveringKey = hoveringCardInfo.toKey();
+    const props = cards.get(hoveringKey);
+    if (props !== undefined) {
+      props.backgroundState = CardBackgroundState.Hover;
+      props.zIndex = 1000;
     }
   }
 
@@ -736,8 +805,6 @@ export default function GameTab({
   // const handleAddDeck
 
   // region render
-
-  const otherElements: Array<JSX.Element> = [];
   const buttonSize = 36;
 
   // region r - buttons
