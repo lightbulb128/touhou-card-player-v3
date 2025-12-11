@@ -9,8 +9,10 @@ import { useState, useEffect, JSX, useRef } from "react";
 import { CardInfo, GameJudge, GameJudgeState, OpponentType } from "../types/GameJudge";
 import { CardBackgroundState, CharacterCard } from "./CharacterCard";
 import {
-  SkipNextRounded, PlayArrowRounded
+  SkipNextRounded, PlayArrowRounded, EastRounded, WestRounded,
+  AddRounded, RemoveRounded
 } from "@mui/icons-material";
+import { GameButton } from "./GameTabControls";
 
 
 export interface GameTabProps {
@@ -19,6 +21,7 @@ export interface GameTabProps {
   currentCharacterId: CharacterId;
   characterTemporaryDisabled: Map<CharacterId, boolean>;
   playingOrder: Array<CharacterId>;
+  notifyGameStart: () => void;
   setCurrentCharacterId: (characterId: CharacterId) => void;
 }
 
@@ -36,6 +39,11 @@ type CardRenderProps = {
   onClick?: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+}
+type CardPlaceholderRenderProps = {
+  x: number;
+  y: number;
+  hidden: boolean;
 }
 type Position = {
   x: number;
@@ -56,7 +64,7 @@ type DragInfo = {
 }
 
 function getCardTransitionString(duration: string): string {
-  return `top ${duration}, left ${duration}, transform ${duration}, background-color ${duration}`;
+  return `top ${duration}, left ${duration}, transform ${duration}, background-color ${duration}, width ${duration}, height ${duration}`;
 }
 
 export default function GameTab({
@@ -65,11 +73,13 @@ export default function GameTab({
   currentCharacterId, 
   characterTemporaryDisabled,
   playingOrder,
+  notifyGameStart,
   setCurrentCharacterId
 }: GameTabProps) {
 
   // region states
-  const [, forceRerender] = useState<{}>({}); // used to force re-render
+  const [, setForceRerender] = useState<{}>({}); // used to force re-render
+  const forceRerender = (): void => { setForceRerender({}); };
   const [judge, setJudge] = useState<GameJudge>(new GameJudge());
   const [cardWidthPercentage, setCardWidthPercentage] = useState<number>(0.08);
   const [cardSelectionSliderValue, setCardSelectionSliderValue] = useState<number>(0);
@@ -80,7 +90,7 @@ export default function GameTab({
 
   const playOrderSet = new Set(playingOrder);
   const cards: Map<string, CardRenderProps> = new Map();
-  const placeholderCards: Array<Position> = new Array<Position>();
+  const placeholderCards: Array<CardPlaceholderRenderProps> = new Array<CardPlaceholderRenderProps>();
   const naturalCardOrder: Array<CardInfo> = new Array<CardInfo>();
   const cardInsideDeck: Set<string> = new Set();
   const characterInsideDeck: Set<CharacterId> = new Set();
@@ -95,6 +105,7 @@ export default function GameTab({
   const deckWidth = deckColumns * cardWidth + (deckColumns - 1) * canvasSpacing;
   const deckHeight = deckRows * cardHeight + (deckRows - 1) * canvasSpacing;
   const deckLeft = (canvasWidth - deckWidth) / 2;
+  const deckRight = deckLeft + deckWidth;
   const buttonSize = 48;
   const sliderHeight = 28;
   let middleBarTop = canvasMargin;
@@ -243,7 +254,7 @@ export default function GameTab({
   useEffect(() => {
     // resize
     const handleResize = () => {
-      forceRerender({});
+      forceRerender();
     };
     window.addEventListener('resize', handleResize);
     handleResize();
@@ -257,6 +268,11 @@ export default function GameTab({
     updateUnusedCards();
   }, [data, musicSelection, judge, dragInfo]);
 
+  useEffect(() => {
+    if (judge.currentCharacterId !== null && judge.currentCharacterId !== currentCharacterId) {
+      setCurrentCharacterId(judge.currentCharacterId);
+    }
+  }, [judge.currentCharacterId])
   
   // calculate anchor positions
   const toDeckCardPosition = (deckIndex: 0 | 1, cardIndex: number): Position => {
@@ -279,9 +295,11 @@ export default function GameTab({
 
   // Alice deck
   judge.deck[0].forEach((cardInfo, index) => {
-    if (cardInfo.characterId === null) {
-      placeholderCards.push(toDeckCardPosition(0, index));
-    } else {
+    placeholderCards.push({
+      ...toDeckCardPosition(0, index),
+      hidden: cardInfo.characterId !== null
+    });
+    if (cardInfo.characterId !== null) {
       const cardKey = cardInfo.toKey();
       const cardProps = cards.get(cardKey);
       if (cardProps === undefined) return;
@@ -302,9 +320,11 @@ export default function GameTab({
   // Bob deck
   if (judge.opponentType !== OpponentType.None) {
     judge.deck[1].forEach((cardInfo, index) => {
-      if (cardInfo.characterId === null) {
-        placeholderCards.push(toDeckCardPosition(1, index));
-      } else {
+      placeholderCards.push({
+        ...toDeckCardPosition(1, index),
+        hidden: cardInfo.characterId !== null
+      });
+      if (cardInfo.characterId !== null) {
         const cardKey = cardInfo.toKey();
         const cardProps = cards.get(cardKey);
         if (cardProps === undefined) return;
@@ -520,6 +540,60 @@ export default function GameTab({
     }
   }
 
+  const cardWidthPercentageMin = 0.04;
+  const cardWidthPercentageMax = 0.40;
+  const handleCardLarger = () => {
+    let newPercentage = cardWidthPercentage + 0.01;
+    if (newPercentage > cardWidthPercentageMax) newPercentage = cardWidthPercentageMax;
+    setCardWidthPercentage(newPercentage);
+  }
+  const handleCardSmaller = () => {
+    let newPercentage = cardWidthPercentage - 0.01;
+    if (newPercentage < cardWidthPercentageMin) newPercentage = cardWidthPercentageMin;
+    setCardWidthPercentage(newPercentage);
+  }
+
+  const maxDeckRows = 5;
+  const maxDeckColumns = 15;
+  const addDeckRow = () => {
+    if (judge.deckRows >= maxDeckRows) return;
+    judge.adjustDeckSize(judge.deckRows + 1, judge.deckColumns);
+    setJudge(judge.reconstruct());
+  }
+
+  const removeDeckRow = () => {
+    if (judge.deckRows <= 1) return;
+    judge.adjustDeckSize(judge.deckRows - 1, judge.deckColumns);
+    setJudge(judge.reconstruct());
+  }
+
+  const addDeckColumn = () => {
+    if (judge.deckColumns >= maxDeckColumns) return;
+    judge.adjustDeckSize(judge.deckRows, judge.deckColumns + 1);
+    setJudge(judge.reconstruct());
+  }
+
+  const removeDeckColumn = () => {
+    if (judge.deckColumns <= 1) return;
+    judge.adjustDeckSize(judge.deckRows, judge.deckColumns - 1);
+    setJudge(judge.reconstruct());
+  }
+
+  const canStartGame = () => {
+    if (judge.state !== GameJudgeState.SelectingCards) return false;
+    if (judge.isDeckEmpty(0)) return false;
+    if (judge.hasOpponent() && judge.isDeckEmpty(1)) return false;
+    return true;
+  }
+
+  const handleStartGame = () => {
+    notifyGameStart();
+    judge.confirmStart(0, forceRerender);
+    setJudge(judge.reconstruct());
+  }
+
+  // const handleAddDeck
+
   // region render
   return (
     <Box>
@@ -550,6 +624,8 @@ export default function GameTab({
               left: `${deckLeft}px`,
               top: `${middleBarTop + cardHeight + canvasSpacing}px`,
               width: `${deckWidth}px`,
+              zIndex: 500,
+              transition: "opacity 0.3s ease, width 0.3s ease, left 0.3s ease, top 0.3s ease",
             }}
           />
         }
@@ -587,18 +663,85 @@ export default function GameTab({
               position: "absolute",
               left: pos.x,
               top: pos.y,
+              opacity: pos.hidden ? 0.0 : 1.0,
+              transition: "opacity 0.3s ease, top 0.3s ease, left 0.3s ease, width 0.3s ease",
             }}
           />
         })}
-        {unusedCards.length > 0 && <Typography
+        <Typography
           sx={{
             position: "absolute",
             left: `${canvasMargin}px`,
             top: `${unusedCardsBottom + canvasSpacing}px`,
+            transition: "opacity 0.3s ease",
+            opacity: unusedCards.length > 0 ? 1.0 : 0.0,
           }}
         >
           Unused cards
-        </Typography>}
+        </Typography>
+
+        {/* Buttons on the right of the player deck */}
+        <Stack 
+          direction="column" spacing={0}
+          sx={{
+            position: "absolute",
+            left: `${deckRight + canvasMargin}px`,
+            top: `${playerDeckTop}px`,
+            transition: "top 0.3s ease, left 0.3s ease",
+          }}
+        >
+          <GameButton text="Card Smaller" onClick={handleCardSmaller} disabled={cardWidthPercentage <= cardWidthPercentageMin}>
+            <WestRounded></WestRounded>
+          </GameButton>
+          <GameButton text="Card Larger" onClick={handleCardLarger} disabled={cardWidthPercentage >= cardWidthPercentageMax}>
+            <EastRounded></EastRounded>
+          </GameButton>
+          <GameButton text="Start" 
+            hidden={judge.state !== GameJudgeState.SelectingCards}
+            disabled={!canStartGame()}
+            onClick={handleStartGame}
+          >
+            <PlayArrowRounded></PlayArrowRounded>
+          </GameButton>
+        </Stack>
+
+        {/* Add/remove deck row, on the right-bottom of the player deck */}
+        <Stack 
+          direction="column" spacing={0}
+          sx={{
+            position: "absolute",
+            left: `${deckRight + canvasMargin}px`,
+            top: `${Math.max(playerDeckTop + deckHeight, playerDeckTop + 210)}px`,
+            transition: "top 0.3s ease, left 0.3s ease",
+            transform: "translateY(-100%)",
+          }}
+        >
+          <GameButton disabled={judge.deckRows <= 1} onClick={removeDeckRow}>
+            <RemoveRounded></RemoveRounded>
+          </GameButton>
+          <GameButton disabled={judge.deckRows >= maxDeckRows} onClick={addDeckRow}>
+            <AddRounded></AddRounded>
+          </GameButton>
+        </Stack>
+
+        {/* Add/remove deck column, on the bottom-right of the player deck */}
+        <Stack 
+          direction="row" spacing={"6px"}
+          sx={{
+            position: "absolute",
+            left: `${deckRight}px`,
+            top: `${playerDeckTop + deckHeight + canvasMargin}px`,
+            transition: "top 0.3s ease, left 0.3s ease",
+            transform: "translateX(-100%)",
+          }}
+        >
+          <GameButton disabled={judge.deckColumns <= 1} onClick={removeDeckColumn}>
+            <RemoveRounded></RemoveRounded>
+          </GameButton>
+          <GameButton disabled={judge.deckColumns >= maxDeckColumns} onClick={addDeckColumn}>
+            <AddRounded></AddRounded>
+          </GameButton>
+        </Stack>
       </Box>
     </Box>
   )

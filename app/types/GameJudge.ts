@@ -120,6 +120,22 @@ class GameJudge {
     this.givesLeft = 0;
   }
 
+  adjustDeckSize(rows: number, columns: number): void {
+    this.deckRows = rows;
+    this.deckColumns = columns;
+    const newSize = rows * columns;
+    for (let player of [Alice, Bob]) {
+      const currentDeck = this.deck[player];
+      if (currentDeck.length > newSize) {
+        this.deck[player] = currentDeck.slice(0, newSize);
+      } else if (currentDeck.length < newSize) {
+        for (let i = currentDeck.length; i < newSize; i++) {
+          this.deck[player].push(new CardInfo(null, 0));
+        }
+      }
+    }
+  }
+
   removeFromDeck(player: Player, cardInfo: CardInfo): boolean {
     for (let i = 0; i < this.deck[player].length; i++) {
       if (this.deck[player][i].equals(cardInfo)) {
@@ -192,7 +208,7 @@ class GameJudge {
     return this.opponentType !== OpponentType.None;
   }
 
-  confirmStart(player: Player): boolean {
+  confirmStart(player: Player, refreshCallback: () => void): boolean {
     if (this.state !== GameJudgeState.SelectingCards) {
       console.warn(`[GameJudge.confirmStart] [P${player}] Invalid state: ${this.state}`);
       return false;
@@ -200,7 +216,7 @@ class GameJudge {
     this.confirmations.start.ok[player] = true;
     if (this.confirmations.start.all(this.hasOpponent())) {
       this.confirmations.start = new GameConfirmation();
-      this.nextTurn();
+      this.countdownNextTurn(refreshCallback);
     }
     return true;
   }
@@ -360,6 +376,16 @@ class GameJudge {
     this.setCountdown(refreshCallback);
   }
 
+  countdownNextTurn(refreshCallback: () => void): void {
+    const needTimeout = this.opponentType == OpponentType.RemotePlayer; // only use timeout if there is a remote player
+    if (needTimeout) {
+      this.setNextTurnTimeout(refreshCallback);
+      this.state = GameJudgeState.TurnCountdownNext;
+    } else {
+      this.nextTurn();
+    }
+  }
+
   confirmNext(player: Player, refreshCallback: () => void): boolean {
     if (this.state !== GameJudgeState.TurnWinnerDetermined) {
       console.warn(`[GameJudge.confirmNext] [P${player}] Invalid state: ${this.state}`);
@@ -368,13 +394,7 @@ class GameJudge {
     this.confirmations.next.ok[player] = true;
     if (this.confirmations.next.all(this.hasOpponent())) {
       this.confirmations.next = new GameConfirmation();
-      const needTimeout = this.opponentType == OpponentType.RemotePlayer; // only use timeout if there is a remote player
-      if (needTimeout) {
-        this.setNextTurnTimeout(refreshCallback);
-        this.state = GameJudgeState.TurnCountdownNext;
-      } else {
-        this.nextTurn();
-      }
+      this.countdownNextTurn(refreshCallback);
     }
     return true;
   }

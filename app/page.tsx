@@ -224,6 +224,10 @@ export default function Home() {
       clearTimeout(pauseTimeoutHandle);
       setPauseTimeoutHandle(null);
     }
+    if (countdownAudioElementRef.current) {
+      countdownAudioElementRef.current.pause();
+      countdownAudioElementRef.current.currentTime = 0;
+    }
     if (audioElementRef.current) {
       audioElementRef.current.pause();
       setPlaybackState(PlaybackState.Stopped);
@@ -275,6 +279,17 @@ export default function Home() {
         break;
       }
     }
+  }
+
+  const handleGameStart = () => {
+    const newTemporaryDisabled = new Map<CharacterId, boolean>();
+    const newOrder = createPlayingOrder(
+      globalData, musicSelection, newTemporaryDisabled, true
+    );
+    setCharacterTemporaryDisabled(newTemporaryDisabled);
+    setPlayingOrder(newOrder);
+    setCurrentCharacterId(newOrder.length > 0 ? newOrder[newOrder.length - 1] : "");
+    handlePause();
   }
 
   // region render
@@ -383,6 +398,7 @@ export default function Home() {
                 characterTemporaryDisabled={characterTemporaryDisabled}
                 currentCharacterId={currentCharacterId}
                 playingOrder={playingOrder}
+                notifyGameStart={handleGameStart}
                 setCurrentCharacterId={setCurrentCharacterId}
               ></GameTab>
             </TabContainer>
