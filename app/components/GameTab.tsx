@@ -943,7 +943,9 @@ export default function GameTab({
     }
   }
 
-  if (judge.state !== GameJudgeState.SelectingCards) { // middlebar
+
+  { // middlebar
+    const middleBarShown = judge.state !== GameJudgeState.SelectingCards;
     const timerTextWidth = 150;
     const textHeight = 30;
     const buttonSize = 47;
@@ -978,7 +980,8 @@ export default function GameTab({
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: "#ffeeee",
-            transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease",
+            opacity: middleBarShown ? 1.0 : 0.0,
+            transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease, opacity 0.3s ease",
           }}
         >
         <Typography variant="h3">{text}</Typography> 
@@ -986,7 +989,7 @@ export default function GameTab({
       );
       x += timerTextWidth + canvasSpacing;
     }
-    {
+    { // text are intentionally set no opacity transition to avoid hinting the player of the correct answer
       const musicInfo = getMusicInfoFromCharacterId(data, musicSelection, currentCharacterId);
       const hidden = judge.state !== GameJudgeState.TurnWinnerDetermined;
       const width = deckWidth - (timerTextWidth + 3 * canvasSpacing + buttonSize * 2);
@@ -999,7 +1002,7 @@ export default function GameTab({
             top: `${y + middleBarHeight / 2}px`,
             transform: "translateY(-100%)",
             width: `${width}px`,
-            opacity: hidden ? 0.0 : 1.0,
+            opacity: (!middleBarShown || hidden) ? 0.0 : 1.0,
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -1018,7 +1021,7 @@ export default function GameTab({
             top: `${y + middleBarHeight / 2}px`,
             textOverflow: "ellipsis",
             width: `${width}px`,
-            opacity: hidden ? 0.0 : 1.0,
+            opacity: (!middleBarShown || hidden) ? 0.0 : 1.0,
             whiteSpace: "nowrap",
             overflow: "hidden",
             transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease",
@@ -1039,6 +1042,8 @@ export default function GameTab({
           disabled={isDisabled}
           sx={{ 
             position: "absolute", left: `${x}px`, top: `${buttonY}px`,
+            opacity: middleBarShown ? 1.0 : 0.0,
+            transition: "left 0.3s ease, top 0.3s ease, opacity 0.3s ease",
           }}
           onClick={
             isPlay ? notifyPlayMusic : notifyPauseMusic
@@ -1059,6 +1064,8 @@ export default function GameTab({
           disabled={!clickable}
           sx={{
             position: "absolute", left: `${x}px`, top: `${buttonY}px`,
+            opacity: middleBarShown ? 1.0 : 0.0,
+            transition: "left 0.3s ease, top 0.3s ease, opacity 0.3s ease",
           }}
           onClick={() => {
             const ret = judge.confirmNext(0, forceRerender);
