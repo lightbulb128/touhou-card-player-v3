@@ -302,6 +302,9 @@ export default function Home() {
   }
 
   const playCountdownAudio = () => {
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+    }
     if (countdownAudioElementRef.current) {
       countdownAudioElementRef.current.currentTime = 0;
       countdownAudioElementRef.current.play();

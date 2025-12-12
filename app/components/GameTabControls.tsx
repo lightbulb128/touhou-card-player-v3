@@ -68,11 +68,11 @@ export function GameButton({
             props.disabled ? "1px solid rgba(0,0,0,0.12)" : "1px solid"
           ) : "none",
           backgroundColor: props.contained ? (
-            props.disabled ? "action.disabledBackground" : "primary.main"
+            props.disabled ? "action.disabled" : "primary.main"
           ) : "transparent",
           "&:hover": {
             backgroundColor: props.contained ? (
-              props.disabled ? "action.disabledBackground" : "primary.dark"
+              props.disabled ? "action.disabled" : "primary.dark"
             ) : "action.hover",
           },
         }}

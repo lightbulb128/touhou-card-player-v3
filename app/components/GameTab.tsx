@@ -123,15 +123,18 @@ export default function GameTab({
     peer: peer,
     notifyStartGame: () => { return new Array<CharacterId>(); },
     notifyNextTurn: () => {},
+    notifyStopGame: () => {},
     refresh: (judge: GameJudge) => { setJudge(judge.reconstruct()); },
   });
   const [judge, setJudge] = useState<GameJudge>(new GameJudge(outerRef));
+  const judgeRef = useRef<GameJudge>(judge);
   const [cardWidthPercentage, setCardWidthPercentage] = useState<number>(0.08);
   const [cardSelectionSliderValue, setCardSelectionSliderValue] = useState<number>(0);
   const [unusedCards, setUnusedCards] = useState<CardInfo[]>([]);
   const [hoveringCardInfo, setHoveringCardInfo] = useState<CardInfo | null>(null);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [remotePlayerIdInput, setRemotePlayerIdInput] = useState<string>("");
+  const [remoteSyncIntervalHandle, setRemoteSyncIntervalHandle] = useState<NodeJS.Timeout | null>(null);
   const [timerState, setTimerState] = useState<TimerState>({ 
     type: "zero", referenceTimestamp: 0, time: 0,
     intervalHandle: null
@@ -179,7 +182,7 @@ export default function GameTab({
   let middleBarTop = opponentDeckBottom + (hasOpponent ? canvasSpacing : 0);
   let middleBarHeight = 0;
   if (judge.state === GameJudgeState.SelectingCards) {
-    middleBarHeight = cardHeight + canvasSpacing + sliderHeight;
+    middleBarHeight = 16 + cardHeight + canvasSpacing + sliderHeight;
   } else {
     middleBarHeight = 80;
   }
@@ -370,8 +373,30 @@ export default function GameTab({
   // region use effects
 
   useEffect(() => {
+    judgeRef.current = judge;
+  }, [judge]);
+
+  useEffect(() => {
     gref.current.timerState = timerState;
   }, [timerState]);
+
+  // useEffect(() => {
+  //   if (isRemotePlayerOpponent) {
+  //     if (remoteSyncIntervalHandle !== null) {
+  //       clearInterval(remoteSyncIntervalHandle);
+  //     }
+  //     const handle = setInterval(() => {
+  //       if (!judgeRef.current.isServer && judgeRef.current.hasRemotePlayer()) {
+  //         judgeRef.current.sendSyncRequest();
+  //       }
+  //     }, 3000);
+  //     setRemoteSyncIntervalHandle(handle);
+  //     return () => {
+  //       clearInterval(handle);
+  //       setRemoteSyncIntervalHandle(null);
+  //     };
+  //   }
+  // }, [isRemotePlayerOpponent]);
 
   useEffect(() => {
     const handle = setInterval(() => {
@@ -544,7 +569,7 @@ export default function GameTab({
       const cardProps = cards.get(cardKey.toKey());
       if (cardProps === undefined) return;
       cardProps.x = deckLeft + index * (cardWidth - cardSelectionOverlap) + offset;
-      cardProps.y = middleBarTop;
+      cardProps.y = middleBarTop + 16;
       cardProps.zIndex = selectableCardKeys.length - index;
     });
   }
@@ -597,6 +622,9 @@ export default function GameTab({
         cardProps.onMouseLeave = () => {
           setHoveringCardInfo(null);
         };
+        if (playerId === 1) {
+          cardProps.upsideDown = true;
+        }
         if (hoveringCardInfo !== null && hoveringCardInfo.toKey() === cardInfo.toKey()) {
           cardProps.y += (playerId === 0) ? -16 : 16;
         }
@@ -874,12 +902,18 @@ export default function GameTab({
     setJudge(judge.reconstruct());
   }
 
-  const handleStopGameButtonClick = () => {
+  const handleStopGame = () => {
     judge.state = GameJudgeState.SelectingCards;
     judge.stopGame();
     setJudge(judge.reconstruct());
     setDragInfo(null);
     setHoveringCardInfo(null);
+  }
+  outerRef.current.notifyStopGame = handleStopGame;
+
+  const handleStopGameButtonClick = () => {
+    judge.sendStopGame();
+    handleStopGame();
   }
 
   const notifyTurnStarted = () => {
@@ -939,17 +973,26 @@ export default function GameTab({
     }
     { // start button
       const isStopGameButton = judge.state !== GameJudgeState.SelectingCards;
-      const disabled = (!isStopGameButton && !canStartGame()) || (isClient && judge.clientWaitAcknowledge);
+      let disabled = (!isStopGameButton && !canStartGame()) || (isClient && judge.clientWaitAcknowledge);
       const contained = (
         !isStopGameButton &&
         judge.state === GameJudgeState.SelectingCards &&
         isRemotePlayerOpponent &&
         judge.confirmations.start.one()
       )
+      let text = isStopGameButton ? "Stop" : "Start";
+      if (contained) {
+        if (judge.confirmations.start.ok[0]) {
+          text = "waiting for opponent ...";
+          disabled = true;
+        } else {
+          text = "Start";
+        }
+      }
       otherElements.push(
         <GameButton 
           key="start-button"
-          text="Start"
+          text={text}
           disabled={disabled}
           onClick={isStopGameButton ? handleStopGameButtonClick : handleStartGameButtonClick}
           sx={{ 
@@ -957,7 +1000,9 @@ export default function GameTab({
           }}
           contained={contained}
         >
-          {!isStopGameButton && <PlayArrowRounded></PlayArrowRounded>}
+          {!isStopGameButton && <PlayArrowRounded
+            htmlColor={(contained && !disabled) ? "white" : "inherit"}
+          ></PlayArrowRounded>}
           {isStopGameButton && <StopRounded></StopRounded>}
         </GameButton>
       );
@@ -1204,20 +1249,38 @@ export default function GameTab({
       x += buttonSize + canvasSpacing;
     }
     { // next turn button
-      const clickable = true;
+      let clickable = true;
       const buttonY = y + middleBarHeight / 2 - buttonSize / 2;
+      const contained = (
+        isRemotePlayerOpponent &&
+        judge.confirmations.next.one()
+      );
+      let text = "";
+      if (contained) {
+        if (judge.confirmations.next.ok[1]) {
+          text = "opponent waiting ...";
+        } else {
+          text = "waiting for opponent ...";
+          clickable = false;
+        }
+      } 
       otherElements.push(
         <GameButton
           key="next-turn-button"
           disabled={!clickable}
+          text={text}
           sx={{
             position: "absolute", left: `${x}px`, top: `${buttonY}px`,
             opacity: middleBarShown ? 1.0 : 0.0,
             transition: "left 0.3s ease, top 0.3s ease, opacity 0.3s ease",
           }}
           onClick={handleNextTurnButtonClick}
+          contained={contained}
         >
-          <SkipNextRounded fontSize="large"></SkipNextRounded>
+          <SkipNextRounded 
+            fontSize="large"
+            htmlColor={(contained && clickable) ? "white" : "inherit"}
+          ></SkipNextRounded>
         </GameButton>
       );
     }
@@ -1308,7 +1371,7 @@ export default function GameTab({
             sx={{
               position: "absolute",
               left: `${deckLeft}px`,
-              top: `${middleBarTop + cardHeight + canvasSpacing}px`,
+              top: `${middleBarTop + cardHeight + canvasSpacing + 16}px`,
               width: `${deckWidth}px`,
               zIndex: 500,
               transition: "opacity 0.3s ease, width 0.3s ease, left 0.3s ease, top 0.3s ease",

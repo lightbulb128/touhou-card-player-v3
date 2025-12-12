@@ -102,25 +102,10 @@ type EventConfirmNext = {
   type: "confirmNext";
 };
 
-type EventPickEvent = {
-  type: "pickEvent";
-  pickEvent: PickEvent;
-};
-
-type EventRequestAcknowledge = {
-  type: "requestAcknowledge";
-  ack: "start" | "next" | "sync";
-  hash: number;
-};
-
 type SyncData = {
   deck: Array<Array<CardInfo>>;
   deckRows: number;
   deckColumns: number;
-  confirmations: {
-    start: GameConfirmation;
-    next: GameConfirmation;
-  };
   turnWinner: Player | null;
   order: Array<{ 
     characterId: CharacterId;
@@ -129,7 +114,31 @@ type SyncData = {
   }>;
   pickEvents: Array<PickEvent>;
   collectedCards: Array<Array<CardInfo>>; // [player][]
-  currentCharacterId: CharacterId;
+  currentCharacterId: CharacterId | null;
+};
+
+type EventPickEvent = {
+  type: "pickEvent";
+  pickEvent: PickEvent;
+};
+
+type EventSyncWinnerDetermined = {
+  type: "syncWinnerDetermined";
+  data: SyncData;
+};
+
+type EventSyncStart = {
+  type: "syncStart";
+  data: SyncData;
+}
+
+type EventSyncNextTurn = {
+  type: "syncNextTurn";
+  data: SyncData;
+};
+
+type EventStopGame = {
+  type: "stopGame";
 };
 
 const hashSyncData = (data: SyncData): number => {
@@ -143,19 +152,42 @@ const hashSyncData = (data: SyncData): number => {
   return hash;
 }
 
-type EventAcknowledge = {
-  type: "acknowledge";
-  ack: "start" | "next" | "sync";
-  hash: number;
-  hasFullData: boolean;
-  syncData?: SyncData;
+// reverse the sync data (swap players)
+const reverseSyncData = (data: SyncData): SyncData => {
+  const reconstructCardInfo = (d: CardInfo): CardInfo => {
+    return new CardInfo(d.characterId, d.cardIndex);
+  };
+  const reconstructCardArray = (d: Array<CardInfo>): Array<CardInfo> => {
+    const newArray: Array<CardInfo> = [];
+    for (let cardInfo of d) {
+      newArray.push(reconstructCardInfo(cardInfo));
+    }
+    return newArray;
+  };
+  const newDeck = [reconstructCardArray(data.deck[Bob]), reconstructCardArray(data.deck[Alice])];
+  const newPickEvents = data.pickEvents.map((event) => {
+    const newPlayer = event.player === Alice ? Bob : Alice;
+    return new PickEvent(event.timestamp, newPlayer, reconstructCardInfo(event.cardInfo));
+  });
+  const newCollectedCards = [reconstructCardArray(data.collectedCards[Bob]), reconstructCardArray(data.collectedCards[Alice])];
+  return {
+    deck: newDeck,
+    deckRows: data.deckRows,
+    deckColumns: data.deckColumns,
+    turnWinner: data.turnWinner === null ? null : (data.turnWinner === Alice ? Bob : Alice),
+    order: data.order,
+    pickEvents: newPickEvents,
+    collectedCards: newCollectedCards,
+    currentCharacterId: data.currentCharacterId,
+  };
 };
 
 type Event = (
   EventAddCard | EventRemoveCard | 
   EventAdjustDeckSize | EventConfirmStart | 
   EventConfirmNext | EventPickEvent |
-  EventRequestAcknowledge | EventAcknowledge
+  EventSyncWinnerDetermined | EventSyncStart | EventSyncNextTurn |
+  EventStopGame
 );
 
 class GamePeer {
@@ -202,6 +234,7 @@ class GamePeer {
       });
       this.peer.on("connection", (conn: DataConnection) => {
         this.dataConnection = conn;
+        console.log("[GamePeer] Incoming connection from peer:", conn.peer);
         this.refresh();
       });
       this.peer.on("disconnected", () => {
@@ -249,6 +282,7 @@ type OuterRefObject = {
   notifyTurnStarted: (characterId: CharacterId) => void;
   notifyStartGame: (order: Array<CharacterId> | null) => Array<CharacterId>; // return the new playing order
   notifyNextTurn: () => void;
+  notifyStopGame: () => void;
   refresh: (judge: GameJudge) => void;
 }
 
@@ -488,11 +522,11 @@ class GameJudge {
       const newPlayingOrder = this._serverStartGame(null); 
       // if this is server, actively send an ack with full data
       if (this.hasRemotePlayer() && this.isServer) {
-        this.sendAcknowledgeRequest(
-          "start", true, 0, 
-          newPlayingOrder,
-          (newPlayingOrder.length > 0) ? newPlayingOrder[newPlayingOrder.length - 1] : ""
-        );
+        const syncData = this.buildSyncData(newPlayingOrder);
+        this.g().peer.sendEvent({
+          type: "syncStart",
+          data: syncData,
+        });
       }
       return; 
     }
@@ -632,8 +666,16 @@ class GameJudge {
           this.removeFromDeck(Bob, found, send);
         }
       }
+      // send sync winner determined
+      if (this.hasRemotePlayer() && this.isServer) {
+        const syncData = this.buildSyncData();
+        this.g().peer.sendEvent({
+          type: "syncWinnerDetermined",
+          data: syncData,
+        });
+      }
+      this.g().notifyTurnWinnerDetermined(this.turnWinner);
     }
-    this.g().notifyTurnWinnerDetermined(this.turnWinner);
     return true;
   }
 
@@ -711,14 +753,17 @@ class GameJudge {
 
   _clientNextTurn(): void {
     this.confirmations.next = new GameConfirmation();
-    if (this.isGeneralServer()) { this._serverNextTurn(); return; }
+    if (this.isGeneralServer()) { 
+      // send
+      const syncData = this.buildSyncData();
+      this.g().peer.sendEvent({
+        type: "syncNextTurn",
+        data: syncData,
+      });
+      this._serverNextTurn(); 
+      return; 
+    }
     this.clientWaitAcknowledge = true;
-    // send a requestAcknowledge event with type next
-    this.g().peer.sendEvent({
-      type: "requestAcknowledge",
-      ack: "next",
-      hash: hashSyncData(this.buildSyncData()),
-    });
   }
 
   finishTurn(): void {
@@ -769,12 +814,17 @@ class GameJudge {
       }
     }
   }
-
+  
   confirmNext(player: Player): {judgeChanged: boolean, nextTurn: boolean} {
     if (this.confirmations.next.ok[player]) {
       return {judgeChanged: false, nextTurn: false};
     }
     this.confirmations.next.ok[player] = true;
+    if (this.hasRemotePlayer()) {
+      this.g().peer.sendEvent({
+        type: "confirmNext",
+      });
+    }
     if (this.confirmations.next.all(this.hasOpponent())) {
       this._clientNextTurn();
       return {judgeChanged: true, nextTurn: true};
@@ -783,14 +833,12 @@ class GameJudge {
   }
 
   buildSyncData(
-    overwritePlayingOrder: Array<CharacterId> | null = null,
-    overwriteCurrentCharacterId: CharacterId | null = null
+    overwritePlayingOrder: Array<CharacterId> | null = null
   ): SyncData {
     const baseData: SyncData = {
       deck: this.deck,
       deckRows: this.deckRows,
       deckColumns: this.deckColumns,
-      confirmations: this.confirmations,
       turnWinner: this.turnWinner,
       order: new Array<{ 
         characterId: CharacterId;
@@ -798,8 +846,8 @@ class GameJudge {
         temporaryDisabled: boolean;
       }>(),
       pickEvents: this.pickEvents,
-      currentCharacterId: this.currentCharacterId()!,
       collectedCards: this.collectedCards,
+      currentCharacterId: this.currentCharacterId(),
     };
     let playingOrder = this.playingOrder();
     if (overwritePlayingOrder !== null) {
@@ -810,33 +858,15 @@ class GameJudge {
       musicSelection: this.g().musicSelection.get(characterId) || 0,
       temporaryDisabled: this.characterTemporaryDisabled().get(characterId) || false,
     }));
-    if (overwriteCurrentCharacterId !== null) {
-      baseData.currentCharacterId = overwriteCurrentCharacterId;
-    }
     return baseData;
   } 
 
-  sendAcknowledgeRequest(
-    ack: "start" | "next" | "sync", 
-    hasFullData: boolean,
-    checkHash: number = 0,
-    overwritePlayingOrder: Array<CharacterId> | null = null,
-    overwriteCurrentCharacterId: CharacterId | null = null,
-  ): void {
-
-    let syncData = ((hasFullData || checkHash !== 0) 
-      ? this.buildSyncData(overwritePlayingOrder, overwriteCurrentCharacterId) 
-      : undefined
-    );
-    const hash = syncData ? hashSyncData(syncData) : 0;
-    hasFullData = hasFullData || (checkHash !== 0 && hash !== checkHash);
-    this.g().peer.sendEvent({
-      type: "acknowledge",
-      ack: ack,
-      hash: hash,
-      hasFullData: hasFullData,
-      syncData: hasFullData ? syncData : undefined,
-    });
+  sendStopGame(): void {
+    if (this.hasRemotePlayer()) {
+      this.g().peer.sendEvent({
+        type: "stopGame",
+      });
+    }
   }
 
   // this function is used to be passed to the GamePeer object.
@@ -844,6 +874,81 @@ class GameJudge {
 
     // Reverse Role
     const cRole = (i: Player) => i === Alice ? Bob : Alice;
+
+    const applySyncData = (data: SyncData) => {
+      this.deck = data.deck;
+      this.deckRows = data.deckRows;
+      this.deckColumns = data.deckColumns;
+      this.turnWinner = data.turnWinner;
+      this.pickEvents = data.pickEvents;
+      this.collectedCards = data.collectedCards;
+      const newOrder: Array<CharacterId> = [];
+      const newMusicSelection: Map<CharacterId, number> = new Map<CharacterId, number>();
+      const newTemporaryDisabled: Map<CharacterId, boolean> = new Map<CharacterId, boolean>();
+      for (let item of data.order) {
+        newOrder.push(item.characterId);
+        newMusicSelection.set(item.characterId, item.musicSelection);
+        newTemporaryDisabled.set(item.characterId, item.temporaryDisabled);
+      }
+      // check if neworder is same, if so, don't set
+      {
+        let same = true;
+        const currentOrder = this.playingOrder();
+        if (currentOrder.length !== newOrder.length) {
+          same = false;
+        } else {
+          for (let i = 0; i < currentOrder.length; i++) {
+            if (currentOrder[i] !== newOrder[i]) {
+              same = false;
+              break;
+            }
+          }
+        }
+        if (!same) {
+          this.g().setPlayingOrder(newOrder);
+        }
+      }
+      // check if music selection is same, if so, don't set
+      {
+        let same = true;
+        const currentMusicSelection = this.g().musicSelection;
+        if (currentMusicSelection.size !== newMusicSelection.size) {
+          same = false;
+        } else {
+          for (let [key, value] of currentMusicSelection) {
+            if (newMusicSelection.get(key) !== value) {
+              same = false;
+              break;
+            }
+          }
+        }
+        if (!same) {
+          this.g().setMusicSelection(newMusicSelection);
+        }
+      }
+      // check if temporary disabled is same, if so, don't set
+      {
+        let same = true;
+        const currentTemporaryDisabled = this.characterTemporaryDisabled();
+        if (currentTemporaryDisabled.size !== newTemporaryDisabled.size) {
+          same = false;
+        } else {
+          for (let [key, value] of currentTemporaryDisabled) {
+            if (newTemporaryDisabled.get(key) !== value) {
+              same = false;
+              break;
+            }
+          }
+        }
+        if (!same) {
+          this.g().setCharacterTemporaryDisabled(newTemporaryDisabled);
+        }
+      }
+      // check current character id
+      if (this.currentCharacterId() !== data.currentCharacterId) {
+        this.g().setCurrentCharacterId(data.currentCharacterId!);
+      }
+    }
 
     const event = JSON.parse(data) as Event;
     console.log("[GameJudge.remoteEventListener] Received event:", event);
@@ -879,9 +984,7 @@ class GameJudge {
         this.confirmations.next.ok[Bob] = true;
         if (this.confirmations.next.all(this.hasOpponent())) {
           this.confirmations.next = new GameConfirmation();
-          this.finishTurn();
-          this.countdownNextTurn();
-          this.g().refresh(this);
+          this._clientNextTurn();
         }
         break;
       }
@@ -896,99 +999,34 @@ class GameJudge {
         this.g().refresh(this);
         break;
       }
-      case "requestAcknowledge": {
-        const e = event as EventRequestAcknowledge;
-        if (e.ack === "start") {
-          this.sendAcknowledgeRequest("start", true);
-        } else {
-          // for "next" and "sync", check hash
-          this.sendAcknowledgeRequest(e.ack, false, e.hash);
-        }
+      case "stopGame": {
+        this.g().notifyStopGame();
+        this.g().refresh(this);
         break;
       }
-      case "acknowledge": {
-        const e = event as EventAcknowledge;
-        // first update full data if available
-        if (e.hasFullData && e.syncData) {
-          const sd = e.syncData;
-
-          // swap deck sides
-          this.deck = [[], []];
-          this.deck[Alice] = sd.deck[Bob].map(ci => new CardInfo(ci.characterId, ci.cardIndex));
-          this.deck[Bob] = sd.deck[Alice].map(ci => new CardInfo(ci.characterId, ci.cardIndex));
-
-          this.deckRows = sd.deckRows;
-          this.deckColumns = sd.deckColumns;
-
-          // swap confirmations
-          {
-            const start = new GameConfirmation();
-            start.fromDeserialized(sd.confirmations.start.ok);
-            start.swap();
-            this.confirmations.start = start;
-            const next = new GameConfirmation();
-            next.fromDeserialized(sd.confirmations.next.ok);
-            next.swap();
-            this.confirmations = {
-              start: start,
-              next: next,
-            };
-          }
-
-          this.turnWinner = sd.turnWinner !== null ? cRole(sd.turnWinner) : null;
-
-          // change pickevent players
-          this.pickEvents = sd.pickEvents.map(
-            pe => new PickEvent(
-              pe.timestamp, 
-              cRole(pe.player), 
-              new CardInfo(pe.cardInfo.characterId, pe.cardInfo.cardIndex)
-            )
-          );
-
-          const order = sd.order;
-          const tempDisabledMap = new Map<CharacterId, boolean>();
-          const musicSelectionMap = new Map<CharacterId, number>();
-          for (let o of order) {
-            tempDisabledMap.set(o.characterId, o.temporaryDisabled);
-            musicSelectionMap.set(o.characterId, o.musicSelection);
-          }
-          this.g().setCharacterTemporaryDisabled(tempDisabledMap);
-          this.g().setMusicSelection(musicSelectionMap);
-          // compare current playing order, if different, update
-          {
-            const currentOrder = this.playingOrder();
-            const newOrder = order.map(o => o.characterId);
-            let different = currentOrder.length !== newOrder.length;
-            if (!different) {
-              for (let i = 0; i < currentOrder.length; i++) {
-                if (currentOrder[i] !== newOrder[i]) {
-                  different = true;
-                  break;
-                }
-              }
-            }
-            if (different) {
-              this.g().setPlayingOrder(order.map(o => o.characterId));
-            }
-          }
-          // compare currentCharacterId, if different, update
-          {
-            if (this.currentCharacterId() !== sd.currentCharacterId) {
-              this.g().setCurrentCharacterId(sd.currentCharacterId);
-            }
-          }
-          this.g().refresh(this);
+      case "syncWinnerDetermined": case "syncStart": case "syncNextTurn": {
+        let e: EventSyncWinnerDetermined | EventSyncStart | EventSyncNextTurn;
+        if (event.type === "syncWinnerDetermined") {
+          e = event as EventSyncWinnerDetermined;
+        } else if (event.type === "syncStart") {
+          this.clientWaitAcknowledge = false;
+          e = event as EventSyncStart;
+        } else {
+          this.clientWaitAcknowledge = false;
+          e = event as EventSyncNextTurn;
         }
-        if (e.ack === "start") {
-          this.clientWaitAcknowledge = false;
-          // client receives the new order from the server.
-          const receivedOrder = e.syncData ? e.syncData.order.map(o => o.characterId) : [];
-          this._serverStartGame(receivedOrder);
-        } else if (e.ack === "next") {
-          this.clientWaitAcknowledge = false;
+        // reverse the sync data
+        const data = reverseSyncData(e.data);
+        // apply the sync data
+        applySyncData(data);
+        if (event.type === "syncStart") {
+          const newOrder = data.order.map(item => item.characterId);
+          this._serverStartGame(newOrder);
+        } else if (event.type === "syncNextTurn") {
           this._serverNextTurn();
         }
+        this.g().refresh(this);
+        break;
       }
     }
   }

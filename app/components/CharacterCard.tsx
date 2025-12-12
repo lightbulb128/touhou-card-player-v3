@@ -50,7 +50,7 @@ export function CharacterCard({
 		aspectRatio = CardAspectRatio;
 	}
 	if (paperElevation === undefined) {
-		paperElevation = 3;
+		paperElevation = 2;
 	}
 	if (paperVariant === undefined) {
 		paperVariant = "elevation";
