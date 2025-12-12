@@ -1,5 +1,5 @@
 import { RefObject } from "react";
-import { CharacterId, MusicSelectionMap } from "./Configs";
+import { CharacterId, GlobalData, MusicSelectionMap } from "./Configs";
 import Peer, { DataConnection } from "peerjs";
 
 const Alice = 0; // Alice is always the local host
@@ -141,6 +141,23 @@ type EventStopGame = {
   type: "stopGame";
 };
 
+type EventGive = {
+  type: "give";
+};
+
+type EventSwitchTraditionalMode = {
+  type: "switchTraditionalMode";
+  traditionalMode: boolean;
+};
+
+type EventPauseMusic = {
+  type: "pauseMusic";
+};
+
+type EventResumeMusic = {
+  type: "resumeMusic";
+};
+
 const hashSyncData = (data: SyncData): number => {
   let str = JSON.stringify(data);
   let hash = 0;
@@ -187,7 +204,8 @@ type Event = (
   EventAdjustDeckSize | EventConfirmStart | 
   EventConfirmNext | EventPickEvent |
   EventSyncWinnerDetermined | EventSyncStart | EventSyncNextTurn |
-  EventStopGame
+  EventStopGame | EventSwitchTraditionalMode | EventPauseMusic | EventResumeMusic |
+  EventGive
 );
 
 class GamePeer {
@@ -217,6 +235,7 @@ class GamePeer {
       this.refresh();
     });
     this.dataConnection.on("close", () => {
+      this.dataConnection?.removeAllListeners("data");
       this.dataConnection = null;
       this.notifyDisconnected();
     });
@@ -238,6 +257,7 @@ class GamePeer {
         this.refresh();
       });
       this.peer.on("disconnected", () => {
+        this.dataConnection?.removeAllListeners("data");
         this.dataConnection = null;
         this.notifyDisconnected();
       });
@@ -254,7 +274,7 @@ class GamePeer {
       console.warn("No data connection available to send selectCards event.");
       return;
     }
-    console.log("[GamePeer.sendEvent] Sending event:", payload);
+    console.log("[GamePeer] Sending event:", payload);
     this.dataConnection!.send(JSON.stringify(payload));
   }
 
@@ -269,6 +289,7 @@ class GamePeer {
 
 
 type OuterRefObject = {
+  globalData: GlobalData;
   playingOrder: Array<CharacterId>;
   characterTemporaryDisabled: Map<CharacterId, boolean>;
   currentCharacterId: CharacterId;
@@ -283,6 +304,7 @@ type OuterRefObject = {
   notifyStartGame: (order: Array<CharacterId> | null) => Array<CharacterId>; // return the new playing order
   notifyNextTurn: () => void;
   notifyStopGame: () => void;
+  notifyOuterEventHandler: (event: Event) => void;
   refresh: (judge: GameJudge) => void;
 }
 
@@ -401,6 +423,65 @@ class GameJudge {
     }
   }
 
+  randomFillDeck(player: Player, send: boolean): void {
+    const selectableCharacters = new Set<CharacterId>();
+    this.playingOrder().forEach((characterId) => {
+      selectableCharacters.add(characterId);
+    });
+    // remove that are already in deck
+    this.deck.forEach((deck, deckPlayer) => {
+      deck.forEach((cardInfo, index) => {
+        if (cardInfo.characterId !== null) {
+          selectableCharacters.delete(cardInfo.characterId);
+        }
+      });
+    });
+    for (let i = 0; i < this.deck[player].length; i++) {
+      if (this.deck[player][i].characterId === null) {
+        const selectableArray = Array.from(selectableCharacters);
+        if (selectableArray.length === 0) {
+          break;
+        }
+        const randomIndex = Math.floor(Math.random() * selectableArray.length);
+        const characterId = selectableArray[randomIndex];
+        const cardCount = this.g().globalData.characterConfigs.get(characterId)?.card.length || 1;
+        const cardId = Math.floor(Math.random() * cardCount);
+        selectableCharacters.delete(characterId);
+        this.addToDeck(player, new CardInfo(characterId, cardId), i, send);
+      }
+    }
+  }
+
+  clearDeck(player: Player, send: boolean): void {
+    for (let i = 0; i < this.deck[player].length; i++) {
+      this.removeFromDeck(player, this.deck[player][i], send);
+    }
+  }
+
+  shuffleDeck(player: Player, send: boolean): void {
+    const filledCards: Array<CardInfo> = [];
+    for (let cardInfo of this.deck[player]) {
+      if (cardInfo.characterId !== null) {
+        filledCards.push(cardInfo);
+        this.removeFromDeck(player, cardInfo, send);
+      }
+    }
+    const emptySlots = new Set<number>();
+    for (let i = 0; i < this.deck[player].length; i++) {
+      emptySlots.add(i);
+    }
+    while (filledCards.length > 0) {
+      const randomCardIndex = Math.floor(Math.random() * filledCards.length);
+      const cardInfo = filledCards.splice(randomCardIndex, 1)[0];
+      const emptySlotsArray = Array.from(emptySlots);
+      const randomSlotIndex = Math.floor(Math.random() * emptySlotsArray.length);
+      const slot = emptySlotsArray[randomSlotIndex];
+      emptySlots.delete(slot);
+      this.addToDeck(player, cardInfo, slot, send);
+    }
+  }
+
+
   removeFromDeck(player: Player, cardInfo: CardInfo, send: boolean): boolean {
     for (let i = 0; i < this.deck[player].length; i++) {
       if (this.deck[player][i].equals(cardInfo)) {
@@ -453,6 +534,19 @@ class GameJudge {
     return false;
   }
 
+  isGameFinished(): boolean {
+    if (!this.hasOpponent()) {
+      return this.isDeckEmpty(Alice);
+    }
+    if (this.traditionalMode) {
+      // check if someone has deck empty
+      return this.givesLeft === 0 && (this.isDeckEmpty(Alice) || this.isDeckEmpty(Bob));
+    } else {
+      // check if all deck is empty
+      return this.isDeckEmpty(Alice) && this.isDeckEmpty(Bob);
+    }
+  }
+
   playingOrder(): Array<CharacterId> {
     return this.outerRef.current ? this.outerRef.current.playingOrder : [];
   }
@@ -467,7 +561,7 @@ class GameJudge {
   }
 
   nextTurn(): boolean {
-    console.log("[GameJudge.nextTurn] Moving to next turn.");
+    console.log("[GameJudge] Moving to next turn.");
     const playingOrder = this.playingOrder();
     const characterTemporaryDisabled = this.characterTemporaryDisabled();
     const currentCharacterId = this.currentCharacterId();
@@ -566,17 +660,17 @@ class GameJudge {
     });
   }
 
-  calculateGivesFromPickEvents(): boolean {
+  calculateGivesFromPickEvents(correctCardOnSide: Player | null): boolean {
+    if (!this.hasOpponent()) {
+      this.givesLeft = 0;
+      return false;
+    }
+    // non-traditional mode does not involve giving cards.
+    if (!this.traditionalMode) { 
+      this.givesLeft = 0;
+      return false;
+    }
     const currentCharacterId = this.currentCharacterId();
-    if (!this.hasOpponent) {
-      this.givesLeft = 0;
-      return false;
-    }
-    // traditional mode does not involve giving cards.
-    if (this.traditionalMode) { 
-      this.givesLeft = 0;
-      return false;
-    }
     let net = 0;
     for (let event of this.pickEvents) {
       // for each wrong pick, if Alice, net - 1, if Bob, net + 1
@@ -590,11 +684,10 @@ class GameJudge {
         // for the right pick:
         // if the pick is on the picking player's side of deck, net does not change.
         // otherwise, picker give one card to the opponent
-        const onAliceSide = this.deck[Alice].some(card => card.characterId === event.characterId());
-        if (event.player === Alice && !onAliceSide) {
+        if (event.player === Alice && correctCardOnSide === Bob) {
           net += 1;
         }
-        if (event.player === Bob && onAliceSide) {
+        if (event.player === Bob && correctCardOnSide === Alice) {
           net -= 1;
         }
       }
@@ -608,6 +701,14 @@ class GameJudge {
         }
       }
       net = Math.min(net, emptySlots);
+      // check how many cards Alice has. if less than net, limit to that.
+      let cardCount = 0;
+      for (let cardInfo of this.deck[Alice]) {
+        if (cardInfo.characterId !== null) {
+          cardCount += 1;
+        }
+      }
+      net = Math.min(net, cardCount);
     }
     if (net < 0) {
       // check how many empty slots Alice has. if less than -net, limit to that.
@@ -618,6 +719,13 @@ class GameJudge {
         }
       }
       net = Math.max(net, -emptySlots);
+      // check how many cards Bob has. if less than -net, limit to that.
+      let cardCount = 0;
+      for (let cardInfo of this.deck[Bob]) {
+        if (cardInfo.characterId !== null) {
+          cardCount += 1;
+        }
+      }
     }
     this.givesLeft = net;
     return true;
@@ -644,7 +752,7 @@ class GameJudge {
     }
     if (winnerFound) {
       this.state = GameJudgeState.TurnWinnerDetermined;
-      this.calculateGivesFromPickEvents();
+      let correctCardOnSide: Player | null = null;
       // collect card to collected
       if (this.turnWinner !== null) {
         let found = null;
@@ -653,6 +761,7 @@ class GameJudge {
             if (cardInfo.characterId === currentCharacterId) {
               this.collectedCards[this.turnWinner].push(cardInfo);
               found = cardInfo;
+              correctCardOnSide = deckPlayer as Player;
               break;
             }
           }
@@ -666,6 +775,7 @@ class GameJudge {
           this.removeFromDeck(Bob, found, send);
         }
       }
+      this.calculateGivesFromPickEvents(correctCardOnSide);
       // send sync winner determined
       if (this.hasRemotePlayer() && this.isServer) {
         const syncData = this.buildSyncData();
@@ -745,7 +855,11 @@ class GameJudge {
   }
 
   _serverNextTurn(): void {
-    this.finishTurn();
+    const ok = this.finishTurn();
+    if (!ok) {
+      this.g().refresh(this);
+      return;
+    }
     this.countdownNextTurn();
     this.g().notifyNextTurn();
     this.g().refresh(this);
@@ -766,53 +880,76 @@ class GameJudge {
     this.clientWaitAcknowledge = true;
   }
 
-  finishTurn(): void {
-    if (this.state === GameJudgeState.TurnWinnerDetermined) {
-      if (this.opponentType === OpponentType.CPU && this.givesLeft != 0) {
-        // process gives arbitrarily for CPU
-        let givesLeft = this.givesLeft;
-        let giver: Player = givesLeft > 0 ? Alice : Bob;
-        let receiver: Player = givesLeft > 0 ? Bob : Alice;
-        givesLeft = Math.abs(givesLeft);
-        while (givesLeft > 0) {
-          const fromIndices: number[] = [];
-          this.deck[giver].forEach((cardInfo, index) => {
-            if (cardInfo.characterId !== null) {
-              fromIndices.push(index);
-            }
-          });
-          const toIndices: number[] = [];
-          this.deck[receiver].forEach((cardInfo, index) => {
-            if (cardInfo.characterId === null) {
-              toIndices.push(index);
-            }
-          });
-          if (fromIndices.length === 0 || toIndices.length === 0) {
-            break;
+  giveCardsRandomly(send: boolean): void {
+    if (this.givesLeft > 0) {
+      // process gives arbitrarily for CPU
+      let givesLeft = this.givesLeft;
+      let giver: Player = givesLeft > 0 ? Alice : Bob;
+      let receiver: Player = givesLeft > 0 ? Bob : Alice;
+      givesLeft = Math.abs(givesLeft);
+      while (givesLeft > 0) {
+        const fromIndices: number[] = [];
+        this.deck[giver].forEach((cardInfo, index) => {
+          if (cardInfo.characterId !== null) {
+            fromIndices.push(index);
           }
-          const fromIndex = fromIndices[Math.floor(Math.random() * fromIndices.length)];
-          const toIndex = toIndices[Math.floor(Math.random() * toIndices.length)];
-          const cardInfo = this.deck[giver][fromIndex];
-          this.moveCard(giver, cardInfo, receiver, toIndex, false);
-          givesLeft -= 1;
+        });
+        const toIndices: number[] = [];
+        this.deck[receiver].forEach((cardInfo, index) => {
+          if (cardInfo.characterId === null) {
+            toIndices.push(index);
+          }
+        });
+        if (fromIndices.length === 0 || toIndices.length === 0) {
+          break;
+        }
+        const fromIndex = fromIndices[Math.floor(Math.random() * fromIndices.length)];
+        const toIndex = toIndices[Math.floor(Math.random() * toIndices.length)];
+        const cardInfo = this.deck[giver][fromIndex];
+        this.moveCard(giver, cardInfo, receiver, toIndex, send);
+        givesLeft -= 1;
+        if (this.givesLeft > 0 && send && this.hasRemotePlayer()) {
+          this.g().peer.sendEvent({
+            type: "give",
+          });
         }
       }
+      this.givesLeft = 0;
+      this.g().refresh(this);
+    }
+  }
+
+  finishTurn(): boolean {
+    if (this.state === GameJudgeState.TurnWinnerDetermined) {
+      if (this.opponentType === OpponentType.CPU && this.givesLeft != 0) {
+        this.giveCardsRandomly(false);
+      }
+      return true;
     }
     if (this.state === GameJudgeState.TurnStart) {
       // no winner this turn
       // check if the correct answer is in the deck. if so, remove it.
       const currentCharacterId = this.currentCharacterId();
+      let correctCardOnSide: Player | null = null;
       for (let player of [Alice, Bob]) {
         for (let i = 0; i < this.deck[player].length; i++) {
           const cardInfo = this.deck[player][i];
           if (cardInfo.characterId === currentCharacterId) {
             // remove from deck
             this.removeFromDeck(player as Player, cardInfo, false);
+            correctCardOnSide = player as Player;
             break;
           }
         }
       }
+      this.calculateGivesFromPickEvents(correctCardOnSide);
+      if (this.givesLeft !== 0) {
+        this.state = GameJudgeState.TurnWinnerDetermined;
+        this.g().notifyTurnWinnerDetermined(this.turnWinner);
+        return false;
+      }
     }
+    return true;
   }
   
   confirmNext(player: Player): {judgeChanged: boolean, nextTurn: boolean} {
@@ -951,7 +1088,7 @@ class GameJudge {
     }
 
     const event = JSON.parse(data) as Event;
-    console.log("[GameJudge.remoteEventListener] Received event:", event);
+    console.log("[GameJudge] Received event:", event);
     switch (event.type) {
       case "addCard": {
         const e = event as EventAddCard;
@@ -1028,7 +1165,20 @@ class GameJudge {
         this.g().refresh(this);
         break;
       }
+      case "switchTraditionalMode": {
+        const e = event as EventSwitchTraditionalMode;
+        this.traditionalMode = e.traditionalMode;
+        this.g().refresh(this);
+        break;
+      }
+      case "give": {
+        if (this.givesLeft < 0) {
+          this.givesLeft += 1;
+          this.g().refresh(this);
+        }
+      }
     }
+    this.outerRef.current?.notifyOuterEventHandler(event);
   }
 
 }
@@ -1046,3 +1196,12 @@ export type {
   Player,
   DeckPosition,
 };
+export type {
+  Event, EventAddCard, EventRemoveCard,
+  EventAdjustDeckSize, EventConfirmStart,
+  EventConfirmNext, EventPickEvent,
+  EventSyncWinnerDetermined, EventSyncStart,
+  EventSyncNextTurn, EventStopGame,
+  EventSwitchTraditionalMode,
+  EventGive,
+}

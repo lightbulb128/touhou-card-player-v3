@@ -238,6 +238,21 @@ export default function Home() {
     }
   }
 
+  const handleGamePauseMusic = () => {
+    if (pauseTimeoutHandle) {
+      clearTimeout(pauseTimeoutHandle);
+      setPauseTimeoutHandle(null);
+    }
+    if (countdownAudioElementRef.current) {
+      countdownAudioElementRef.current.pause();
+    }
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+      // Use timeoutPause so that when player clicks next/play, it can resume
+      setPlaybackState(PlaybackState.TimeoutPause);
+    }
+  }
+
   const handleAudioLoadedData = () => {
     // Auto play when data is loaded
     if ((
@@ -432,7 +447,7 @@ export default function Home() {
                 currentCharacterId={currentCharacterId}
                 playingOrder={playingOrder}
                 playback={playback}
-                notifyPauseMusic={handlePause}
+                notifyPauseMusic={handleGamePauseMusic}
                 notifyPlayMusic={handlePlay}
                 playbackState={playbackState}
                 notifyGameStart={handleGameStart}
