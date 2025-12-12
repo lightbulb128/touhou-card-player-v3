@@ -14,6 +14,7 @@ export interface GameButtonProps {
   children?: React.ReactNode;
   bordered?: boolean;
   size?: "small" | "medium" | "large";
+  contained?: boolean;
 }
 
 export function GameButton({
@@ -41,6 +42,9 @@ export function GameButton({
   if (props.size === undefined) {
     props.size = "small";
   }
+  if (props.contained === undefined) {
+    props.contained = false;
+  }
   return (
     <Stack 
       direction={props.textOnLeft ? "row-reverse" : "row"}
@@ -63,6 +67,14 @@ export function GameButton({
           border: props.bordered ? (
             props.disabled ? "1px solid rgba(0,0,0,0.12)" : "1px solid"
           ) : "none",
+          backgroundColor: props.contained ? (
+            props.disabled ? "action.disabledBackground" : "primary.main"
+          ) : "transparent",
+          "&:hover": {
+            backgroundColor: props.contained ? (
+              props.disabled ? "action.disabledBackground" : "primary.dark"
+            ) : "action.hover",
+          },
         }}
         size={props.size}
       >

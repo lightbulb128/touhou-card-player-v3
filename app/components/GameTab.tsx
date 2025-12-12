@@ -27,11 +27,14 @@ export interface GameTabProps {
   playingOrder: Array<CharacterId>;
   playback: Playback,
   playbackState: PlaybackState,
-  notifyGameStart: (playingOrder: Array<CharacterId> | null) => void;
+  notifyGameStart: (order: Array<CharacterId> | null) => Array<CharacterId>;
   notifyPauseMusic: () => void;
   notifyPlayMusic: () => void;
   notifyPlayCountdownAudio: () => void;
   setCurrentCharacterId: (characterId: CharacterId) => void;
+  setPlayingOrder: (order: Array<CharacterId>) => void;
+  setCharacterTemporaryDisabled: (map: Map<CharacterId, boolean>) => void;
+  setMusicSelection: (map: MusicSelectionMap) => void;
 }
 
 type CardRenderProps = {
@@ -95,30 +98,40 @@ export default function GameTab({
   notifyPauseMusic,
   notifyPlayMusic,
   notifyPlayCountdownAudio,
-  setCurrentCharacterId
+  setCurrentCharacterId,
+  setPlayingOrder,
+  setCharacterTemporaryDisabled,
+  setMusicSelection,
 }: GameTabProps) {
 
   // region states
+  const [, setForceRerender] = useState<{}>({}); // used to force re-render
   const peerRef = useRef<GamePeer>(new GamePeer());
   const peer = peerRef.current;
+  peer.refresh = () => { setForceRerender({}); };
   const outerRef = useRef<OuterRefObject>({
     playingOrder: playingOrder,
     characterTemporaryDisabled: characterTemporaryDisabled,
     currentCharacterId: currentCharacterId,
+    musicSelection: musicSelection,
     setCurrentCharacterId: setCurrentCharacterId,
+    setPlayingOrder: setPlayingOrder,
+    setCharacterTemporaryDisabled: setCharacterTemporaryDisabled,
+    setMusicSelection: setMusicSelection,
     notifyTurnWinnerDetermined: (winner: Player | null) => {},
     notifyTurnStarted: (characterId: CharacterId) => {},
     peer: peer,
-    notifyStartGame: () => {},
+    notifyStartGame: () => { return new Array<CharacterId>(); },
+    notifyNextTurn: () => {},
     refresh: (judge: GameJudge) => { setJudge(judge.reconstruct()); },
   });
-  const [, setForceRerender] = useState<{}>({}); // used to force re-render
   const [judge, setJudge] = useState<GameJudge>(new GameJudge(outerRef));
   const [cardWidthPercentage, setCardWidthPercentage] = useState<number>(0.08);
   const [cardSelectionSliderValue, setCardSelectionSliderValue] = useState<number>(0);
   const [unusedCards, setUnusedCards] = useState<CardInfo[]>([]);
   const [hoveringCardInfo, setHoveringCardInfo] = useState<CardInfo | null>(null);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
+  const [remotePlayerIdInput, setRemotePlayerIdInput] = useState<string>("");
   const [timerState, setTimerState] = useState<TimerState>({ 
     type: "zero", referenceTimestamp: 0, time: 0,
     intervalHandle: null
@@ -150,6 +163,7 @@ export default function GameTab({
   const hasOpponent = judge.opponentType !== OpponentType.None;
   const isRemotePlayerOpponent = judge.opponentType === OpponentType.RemotePlayer;
   const isServer = !isRemotePlayerOpponent || judge.isServer;
+  const isClient = isRemotePlayerOpponent && !judge.isServer;
   const opponentCollectedTop = canvasMargin;
   let opponentDeckTop = canvasMargin;
   if (hasOpponent && judge.state !== GameJudgeState.SelectingCards) {
@@ -209,6 +223,11 @@ export default function GameTab({
       cardInsideCollected.add(cardInfo.toKey());
     });
   });
+
+  peer.resetListener(judge.remoteEventListener.bind(judge));
+  peer.notifyDisconnected = () => {
+    setForceRerender({});
+  }
   
   // region utility funcs
   const characterIdToCardInfos = (characterId: CharacterId, except: number = -1): Array<CardInfo> => {
@@ -396,14 +415,22 @@ export default function GameTab({
     outerRef.current.playingOrder = playingOrder;
     outerRef.current.characterTemporaryDisabled = characterTemporaryDisabled;
     outerRef.current.currentCharacterId = currentCharacterId;
+    outerRef.current.musicSelection = musicSelection;
     outerRef.current.peer = peer;
     outerRef.current.setCurrentCharacterId = setCurrentCharacterId;
+    outerRef.current.setPlayingOrder = setPlayingOrder;
+    outerRef.current.setCharacterTemporaryDisabled = setCharacterTemporaryDisabled;
+    outerRef.current.setMusicSelection = setMusicSelection;
   }, [
     playingOrder, 
     characterTemporaryDisabled, 
     currentCharacterId,
+    musicSelection,
     peer,
     setCurrentCharacterId,
+    setPlayingOrder,
+    setCharacterTemporaryDisabled,
+    setMusicSelection
   ]);
 
   useEffect(() => {
@@ -741,7 +768,7 @@ export default function GameTab({
                 break;
               }
             }
-            if (deckPos === null && !isRemotePlayerOpponent) {
+            if (deckPos === null && hasOpponent && !isRemotePlayerOpponent) {
               // can also try to add to opponent deck
               for (let i = 0; i < judge.deckRows * judge.deckColumns; i++) {
                 const already = judge.getDeck(1, i);
@@ -820,18 +847,30 @@ export default function GameTab({
     return true;
   }
 
-  const handleStartGame = () =>  {
-    notifyGameStart(null);
+  // returns the new playing order
+  const handleStartGame = (order: Array<CharacterId> | null): Array<CharacterId> =>  {
+    const newPlayingOrder = notifyGameStart(order);
     notifyPlayCountdownAudio();
     timerTextStartCountdown();
+    return newPlayingOrder;
   }
   outerRef.current.notifyStartGame = handleStartGame;
 
   const handleStartGameButtonClick = () => {
-    const r = judge.confirmStart(0, forceRerender);
-    if (r.started) {
-      handleStartGame();
+    judge.confirmStart(0);
+    setJudge(judge.reconstruct());
+  }
+
+  const handleNextTurn = () => {
+    if (judge.opponentType === OpponentType.RemotePlayer) {
+      notifyPlayCountdownAudio();
+      timerTextStartCountdown();
     }
+  }
+  outerRef.current.notifyNextTurn = handleNextTurn;
+
+  const handleNextTurnButtonClick = () => {
+    judge.confirmNext(0);
     setJudge(judge.reconstruct());
   }
 
@@ -900,15 +939,23 @@ export default function GameTab({
     }
     { // start button
       const isStopGameButton = judge.state !== GameJudgeState.SelectingCards;
+      const disabled = (!isStopGameButton && !canStartGame()) || (isClient && judge.clientWaitAcknowledge);
+      const contained = (
+        !isStopGameButton &&
+        judge.state === GameJudgeState.SelectingCards &&
+        isRemotePlayerOpponent &&
+        judge.confirmations.start.one()
+      )
       otherElements.push(
         <GameButton 
           key="start-button"
           text="Start"
-          disabled={!isStopGameButton && !canStartGame()}
+          disabled={disabled}
           onClick={isStopGameButton ? handleStopGameButtonClick : handleStartGameButtonClick}
           sx={{ 
             position: "absolute", left: `${x}px`, top: `${y}px`, 
           }}
+          contained={contained}
         >
           {!isStopGameButton && <PlayArrowRounded></PlayArrowRounded>}
           {isStopGameButton && <StopRounded></StopRounded>}
@@ -1047,7 +1094,6 @@ export default function GameTab({
   { // middlebar
     const middleBarShown = judge.state !== GameJudgeState.SelectingCards;
     const timerTextWidth = 150;
-    const textHeight = 30;
     const buttonSize = 47;
     let x = deckLeft;
     const y = middleBarTop;
@@ -1095,6 +1141,7 @@ export default function GameTab({
       const width = deckWidth - (timerTextWidth + 3 * canvasSpacing + buttonSize * 2);
       otherElements.push(
         <Typography 
+          key="music-title-text"
           variant="h6"
           sx={{
             position: "absolute",
@@ -1114,6 +1161,7 @@ export default function GameTab({
       );
       otherElements.push(
         <Typography 
+          key="music-album-text"
           variant="subtitle1"
           sx={{
             position: "absolute",
@@ -1167,21 +1215,68 @@ export default function GameTab({
             opacity: middleBarShown ? 1.0 : 0.0,
             transition: "left 0.3s ease, top 0.3s ease, opacity 0.3s ease",
           }}
-          onClick={() => {
-            const ret = judge.confirmNext(0);
-            if (ret.nextTurn) {
-              if (judge.opponentType === OpponentType.RemotePlayer) {
-                notifyPlayCountdownAudio();
-                timerTextStartCountdown();
-              }
-            }
-            if (ret.judgeChanged) {
-              setJudge(judge.reconstruct());
-            }
-          }}
+          onClick={handleNextTurnButtonClick}
         >
           <SkipNextRounded fontSize="large"></SkipNextRounded>
         </GameButton>
+      );
+    }
+  }
+
+  { // opponent connection 
+    const textHeight = 16;
+    if (judge.opponentType === OpponentType.RemotePlayer && !peer.hasDataConnection()) {
+      otherElements.push(
+        <Stack
+          key="opponent-connection-box"
+          direction="column"
+          spacing={1}
+          padding={1}
+          sx={{
+            position: "absolute",
+            left: `${deckLeft}px`,
+            top: `${opponentDeckTop}px`,
+            width: `${deckWidth}px`,
+            height: `${deckHeight}px`,
+            backgroundColor: "#ffeeee",
+            alignItems: "center",
+            justifyContent: "center",
+            display: "flex",
+            zIndex: 1500
+          }}
+        >
+          <Typography 
+            variant="body1"
+            sx={{
+              textAlign: "left",
+              height: `${textHeight}px`,
+              width: "100%",
+              paddingLeft: "4px",
+            }}
+          >
+            {isServer ? "Share this code with the remote client player" : "Enter the code from the remote server player"}
+          </Typography>
+          <TextField
+            size="small"
+            multiline
+            sx={{ 
+              width: "100%",
+            }}
+            value={isServer ? (peer.peer?.id ?? "") : remotePlayerIdInput}
+            
+            onChange={(e) => {
+              setRemotePlayerIdInput(e.target.value);
+            }}
+          />
+          {!isServer && <Button
+            onClick={() => {
+              peer.connectToPeer(remotePlayerIdInput);
+            }}
+            variant="outlined"
+          >
+            Connect
+          </Button>}
+        </Stack>
       );
     }
   }

@@ -285,9 +285,10 @@ export default function Home() {
     }
   }
 
-  const handleGameStart = (playingOrder: Array<CharacterId> | null) => {
+  // returns the new playing order
+  const handleGameStart = (order: Array<CharacterId> | null): Array<CharacterId> => {
     const newTemporaryDisabled = new Map<CharacterId, boolean>();
-    const newOrder = playingOrder ? playingOrder : createPlayingOrder(
+    const newOrder = order ?? createPlayingOrder(
       globalData, musicSelection, newTemporaryDisabled, true
     );
     setCharacterTemporaryDisabled(newTemporaryDisabled);
@@ -297,6 +298,7 @@ export default function Home() {
       audioElementRef.current.pause();
     }
     setPlaybackState(PlaybackState.Stopped);
+    return newOrder;
   }
 
   const playCountdownAudio = () => {
@@ -433,6 +435,9 @@ export default function Home() {
                 notifyGameStart={handleGameStart}
                 notifyPlayCountdownAudio={playCountdownAudio}
                 setCurrentCharacterId={setCurrentCharacterId}
+                setPlayingOrder={setPlayingOrder}
+                setCharacterTemporaryDisabled={setCharacterTemporaryDisabled}
+                setMusicSelection={setMusicSelection}
               ></GameTab>
             </TabContainer>
           ]}>
