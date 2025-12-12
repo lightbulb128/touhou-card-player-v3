@@ -80,5 +80,84 @@
         "card": "小悪魔.png",
         "music": "東方紅魔郷 ～ the Embodiment of Scarlet Devil/上海アリス幻樂団 - ヴワル魔法図書館.mp3",
         "tags": ["紅魔郷"]
+    },
+    "パチュリー・ノーレッジ": {
+        "card": "パチュリー.png",
+        "music": [
+            "東方紅魔郷 ～ the Embodiment of Scarlet Devil/上海アリス幻樂団 - ラクトガール　～ 少女密室.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/DayDisc/10. ラクトガール ～ 少女密室.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/NightDisc/10. ヴワル魔法図書館.mp3",
+            "全人類ノ天楽録 ～ 東方緋想天/ArrangeDisc/07. ラクトガール ～ 少女密室.mp3",
+            "核熱造神ヒソウテンソク ～ 東方非想天則/13. ヴワル魔法図書館.mp3",
+            "卯酉東海道 ～ Retrospective 53 Minutes/09. ラクトガール ～ 少女密室.mp3",
+            "東方紅魔郷 ～ the Embodiment of Scarlet Devil/上海アリス幻樂団 - 魔法少女達の百年祭.mp3"
+        ],
+        "tags": ["紅魔郷"]
+    },
+    "十六夜咲夜": {
+        "card": "咲夜.png",
+        "music": [
+            "東方紅魔郷 ～ the Embodiment of Scarlet Devil/上海アリス幻樂団 - 月時計　～ ルナ・ダイアル.mp3",
+            "東方紅魔郷 ～ the Embodiment of Scarlet Devil/上海アリス幻樂団 - メイドと血の懐中時計.mp3",
+            "東方花映塚 ～ Phantasmagoria of Flower View/上海アリス幻樂団 - フラワリングナイト.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/DayDisc/06. メイドと血の懐中時計.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/NightDisc/06. 月時計 ～ ルナ・ダイアル.mp3",
+            "全人類ノ天楽録 ～ 東方緋想天/ArrangeDisc/04. フラワリングナイト.mp3",
+            "東方紅魔郷 ～ the Embodiment of Scarlet Devil/上海アリス幻樂団 - ツェペシュの幼き末裔.mp3"
+        ],
+        "tags": ["紅魔郷"]
+    },
+    "レミリア・スカーレット": {
+        "card": "レミリア.png",
+        "music": [
+            "東方紅魔郷 ～ the Embodiment of Scarlet Devil/上海アリス幻樂団 - 亡き王女の為のセプテット.mp3",
+            "東方紅魔郷 ～ the Embodiment of Scarlet Devil/上海アリス幻樂団 - ツェペシュの幼き末裔.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/DayDisc/13. 亡き王女の為のセプテット.mp3",
+            "全人類ノ天楽録 ～ 東方緋想天/ArrangeDisc/09. 亡き王女の為のセプテット.mp3"
+        ],
+        "tags": ["紅魔郷"]
+    },
+    "フランドール・スカーレット": {
+        "card": "フラン.png",
+        "music": [
+            "東方紅魔郷 ～ the Embodiment of Scarlet Devil/上海アリス幻樂団 - U.N.オーエンは彼女なのか？.mp3",
+            "東方紅魔郷 ～ the Embodiment of Scarlet Devil/上海アリス幻樂団 - 魔法少女達の百年祭.mp3",
+            "強欲な獣のムジカ/黄昏フロンティア - U.N.オーエンは彼女なのか？.mp3",
+            "蓬莱人形 ～ Dolls in Pseudo Paradise/11. U.N.オーエンは彼女なのか？.mp3"
+        ],
+        "tags": ["紅魔郷"]
+    },
+
+    "レティ・ホワイトロック": {
+        "card": "レティ.png",
+        "music": "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - クリスタライズシルバー.mp3",
+        "tags": ["妖々夢"]
+    },
+    "橙": {
+        "card": "橙.png",
+        "music": [
+            "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - ティアオイエツォン(withered leaf).mp3",
+            "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - 遠野幻想物語.mp3",
+            "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - 妖々跋扈.mp3"
+        ],
+        "tags": ["妖々夢"]
+    },
+    "アリス・マーガトロイド": {
+        "card": "アリス＆上海蓬莱.png",
+        "music": [
+            "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - 人形裁判　～ 人の形弄びし少女.mp3",
+            "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - ブクレシュティの人形師.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/DayDisc/08. ブクレシュティの人形師.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/NightDisc/08. 人形裁判.mp3",
+            "全人類ノ天楽録 ～ 東方緋想天/ArrangeDisc/05. ブクレシュティの人形師.mp3",
+            "核熱造神ヒソウテンソク ～ 東方非想天則/12. the Grimoire of Alice.mp3",
+            "夢違科学世紀 ～ Changeability of Strange Dream/08. 人形裁判 ～ 人の形弄びし少女.mp3"
+        ],
+        "tags": ["妖々夢"]
+    },
+    "リリーホワイト": {
+        "card": "リリー.png",
+        "music": "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - 天空の花の都.mp3",
+        "tags": ["妖々夢"]
     }
 }

@@ -1,5 +1,6 @@
 import { RefObject } from "react";
 import { CharacterId } from "./Configs";
+import Peer, { DataConnection } from "peerjs";
 
 const Alice = 0; // Alice is always the local host
 const Bob = 1; // Bob is always the remote player
@@ -56,19 +57,105 @@ class PickEvent {
   characterId(): CharacterId {return this.cardInfo.characterId!}
 };
 
+type DeckPosition = {deckIndex: 0 | 1, cardIndex: number}
+
 enum OpponentType {
   None,
   CPU,
   RemotePlayer
 }
 
+type EventAddCard = {
+  type: "addCard";
+  cardInfo: CardInfo;
+  deckPosition: DeckPosition;
+};
+
+type EventRemoveCard = {
+  type: "removeCard";
+  cardInfo: CardInfo;
+  deckPosition: DeckPosition;
+};
+
+type EventAdjustDeckSize = {
+  type: "adjustDeckSize";
+  rows: number;
+  columns: number;
+};
+
+type EventConfirmStart = {
+  type: "confirmStart";
+};
+
+type EventConfirmNext = {
+  type: "confirmNext";
+};
+
+type EventPickEvent = {
+  type: "pickEvent";
+  pickEvent: PickEvent;
+};
+
+type Event = (
+  EventAddCard | EventRemoveCard | 
+  EventAdjustDeckSize | EventConfirmStart | 
+  EventConfirmNext | EventPickEvent
+);
+
+class GamePeer {
+  peer: Peer | null;
+  dataConnection: DataConnection | null;
+
+  constructor() {
+    this.peer = null;
+    this.dataConnection = null;
+  }
+
+  disconnect() {
+    if (this.dataConnection) {
+      this.dataConnection.close();
+      this.dataConnection = null;
+    }
+  }
+
+  hasDataConnection(): boolean {
+    return this.dataConnection !== null && this.dataConnection.open;
+  }
+
+  ensurePeerNotNull() {
+    if (this.peer === null) {
+      this.peer = new Peer();
+    }
+  }
+
+  sendEvent(payload: Event) {
+    if (!this.hasDataConnection()) {
+      console.warn("No data connection available to send selectCards event.");
+      return;
+    }
+    this.dataConnection!.send(JSON.stringify(payload));
+  }
+
+  resetListener(ondata: (data: any) => void) {
+    if (this.dataConnection) {
+      this.dataConnection.removeAllListeners("data");
+      this.dataConnection.on("data", ondata);
+    }
+  }
+  
+}
+
+
 type OuterRefObject = {
   playingOrder: Array<CharacterId>;
   characterTemporaryDisabled: Map<CharacterId, boolean>;
   currentCharacterId: CharacterId;
+  peer: GamePeer;
   setCurrentCharacterId: (id: CharacterId) => void;
   notifyTurnWinnerDetermined: (winner: Player | null) => void;
   notifyTurnStarted: (characterId: CharacterId) => void;
+  notifyStartGame: () => void;
+  refresh: (judge: GameJudge) => void;
 }
 
 class GameJudge {
@@ -110,6 +197,10 @@ class GameJudge {
     }
   }
 
+  hasRemotePlayer(): boolean {
+    return this.opponentType === OpponentType.RemotePlayer;
+  }
+
   stopGame(): void {
     this.clearTimeouts();
     this.state = GameJudgeState.SelectingCards;
@@ -122,6 +213,13 @@ class GameJudge {
     this.collectedCards = [[], []];
     this.pickEvents = [];
     this.givesLeft = 0;
+  }
+
+  resetOpponentDeck(): void {
+    this.deck[Bob] = [];
+    for (let i = 0; i < this.deckRows * this.deckColumns; i++) {
+      this.deck[Bob].push(new CardInfo(null, 0));
+    }
   }
 
   constructor(outerRef: RefObject<OuterRefObject>) {
@@ -149,7 +247,7 @@ class GameJudge {
     this.givesLeft = 0;
   }
 
-  adjustDeckSize(rows: number, columns: number): void {
+  adjustDeckSize(rows: number, columns: number, send: boolean): void {
     this.deckRows = rows;
     this.deckColumns = columns;
     const newSize = rows * columns;
@@ -163,12 +261,26 @@ class GameJudge {
         }
       }
     }
+    if (this.hasRemotePlayer() && send) {
+      this.g().peer.sendEvent({
+        type: "adjustDeckSize",
+        rows: rows,
+        columns: columns,
+      });
+    }
   }
 
-  removeFromDeck(player: Player, cardInfo: CardInfo): boolean {
+  removeFromDeck(player: Player, cardInfo: CardInfo, send: boolean): boolean {
     for (let i = 0; i < this.deck[player].length; i++) {
       if (this.deck[player][i].equals(cardInfo)) {
         this.deck[player][i] = new CardInfo(null, 0);
+        if (this.hasRemotePlayer() && send) {
+          this.g().peer.sendEvent({
+            type: "removeCard",
+            cardInfo: cardInfo,
+            deckPosition: {deckIndex: player, cardIndex: i},
+          });
+        }
         return true;
       }
     }
@@ -186,17 +298,25 @@ class GameJudge {
     return v;
   }
 
-  addToDeck(player: Player, cardInfo: CardInfo, toIndex: number | null): boolean {
+  addToDeck(player: Player, cardInfo: CardInfo, toIndex: number | null, send: boolean): boolean {
     // if toIndex is null, add to first empty slot
     if (toIndex === null) {
       for (let i = 0; i < this.deck[player].length; i++) {
         if (this.deck[player][i].characterId === null) {
-          this.deck[player][i] = cardInfo;
-          return true;
+          toIndex = i;
+          break;
         }
       }
-    } else {
+    }
+    if (toIndex !== null) {
       this.deck[player][toIndex] = cardInfo;
+      if (this.hasRemotePlayer() && send) {
+        this.g().peer.sendEvent({
+          type: "addCard",
+          cardInfo: cardInfo,
+          deckPosition: {deckIndex: player, cardIndex: toIndex},
+        });
+      }
       return true;
     }
     return false;
@@ -261,9 +381,14 @@ class GameJudge {
       return {judgeChanged: false, started: false};
     }
     this.confirmations.start.ok[player] = true;
+    if (this.hasRemotePlayer()) {
+      this.g().peer.sendEvent({
+        type: "confirmStart",
+      });
+    }
     if (this.confirmations.start.all(this.hasOpponent())) {
       this.confirmations.start = new GameConfirmation();
-      this.countdownNextTurn(refreshCallback, true);
+      this.countdownNextTurn(true);
       return {judgeChanged: true, started: true};
     }
     return {judgeChanged: true, started: false};
@@ -341,9 +466,15 @@ class GameJudge {
     return true;
   }
 
-  notifyPickEvent(pickEvent: PickEvent): boolean {
+  notifyPickEvent(pickEvent: PickEvent, send: boolean): boolean {
     const currentCharacterId = this.currentCharacterId();
     this.pickEvents.push(pickEvent);
+    if (this.hasRemotePlayer() && send) {
+      this.g().peer.sendEvent({
+        type: "pickEvent",
+        pickEvent: pickEvent,
+      });
+    }
     this.sortPickEvents();
     // check if the winner is determined (someone picked the current characterId)
     let winnerFound = false;
@@ -374,8 +505,8 @@ class GameJudge {
         }
         if (found !== null) {
           // remove from deck
-          this.removeFromDeck(Alice, found);
-          this.removeFromDeck(Bob, found);
+          this.removeFromDeck(Alice, found, send);
+          this.removeFromDeck(Bob, found, send);
         }
       }
     }
@@ -383,13 +514,13 @@ class GameJudge {
     return true;
   }
 
-  moveCard(player: Player, from: CardInfo, toPlayer: Player, toIndex: number | null): boolean {
-    const removed = this.removeFromDeck(player, from);
+  moveCard(player: Player, from: CardInfo, toPlayer: Player, toIndex: number | null, send: boolean): boolean {
+    const removed = this.removeFromDeck(player, from, send);
     if (!removed) {
       console.warn(`[GameJudge.moveCard] [P${player}] Failed to remove card from deck: ${from.characterId}, ${from.cardIndex}`);
       return false;
     }
-    const added = this.addToDeck(toPlayer, from, toIndex);
+    const added = this.addToDeck(toPlayer, from, toIndex, send);
     if (!added) {
       console.warn(`[GameJudge.moveCard] [P${player}] Failed to add card to deck: ${from.characterId}, ${from.cardIndex}`);
       return false;
@@ -415,23 +546,23 @@ class GameJudge {
     return true;
   }
 
-  setNextTurnTimeout(refreshCallback: (judge: GameJudge) => void): void {
+  setNextTurnTimeout(): void {
     if (this.countdownTimeout !== null) {
       clearTimeout(this.countdownTimeout);
     }
     this.state = GameJudgeState.TurnCountdownNext;
-    refreshCallback(this);
+    this.g().refresh(this);
     // after 3 seconds, call nextTurn
     this.countdownTimeout = setTimeout(() => {
       this.nextTurn();
-      refreshCallback(this);
+      this.g().refresh(this);
     }, 3000);
   }
 
-  countdownNextTurn(refreshCallback: (judge: GameJudge) => void, forceCountDown: boolean = false): void {
+  countdownNextTurn(forceCountDown: boolean = false): void {
     const needTimeout = this.opponentType == OpponentType.RemotePlayer; // only use timeout if there is a remote player
     if (needTimeout || forceCountDown) {
-      this.setNextTurnTimeout(refreshCallback);
+      this.setNextTurnTimeout();
       this.state = GameJudgeState.TurnCountdownNext;
     } else {
       this.nextTurn();
@@ -475,7 +606,7 @@ class GameJudge {
           const fromIndex = fromIndices[Math.floor(Math.random() * fromIndices.length)];
           const toIndex = toIndices[Math.floor(Math.random() * toIndices.length)];
           const cardInfo = this.deck[giver][fromIndex];
-          this.moveCard(giver, cardInfo, receiver, toIndex);
+          this.moveCard(giver, cardInfo, receiver, toIndex, false);
           givesLeft -= 1;
         }
       }
@@ -489,7 +620,7 @@ class GameJudge {
           const cardInfo = this.deck[player][i];
           if (cardInfo.characterId === currentCharacterId) {
             // remove from deck
-            this.removeFromDeck(player as Player, cardInfo);
+            this.removeFromDeck(player as Player, cardInfo, false);
             break;
           }
         }
@@ -497,7 +628,7 @@ class GameJudge {
     }
   }
 
-  confirmNext(player: Player, refreshCallback: (judge: GameJudge) => void): {judgeChanged: boolean, nextTurn: boolean} {
+  confirmNext(player: Player): {judgeChanged: boolean, nextTurn: boolean} {
     if (this.confirmations.next.ok[player]) {
       return {judgeChanged: false, nextTurn: false};
     }
@@ -505,10 +636,63 @@ class GameJudge {
     if (this.confirmations.next.all(this.hasOpponent())) {
       this.confirmations.next = new GameConfirmation();
       this.finishTurn();
-      this.countdownNextTurn(refreshCallback);
+      this.countdownNextTurn();
       return {judgeChanged: true, nextTurn: true};
     }
     return {judgeChanged: true, nextTurn: false};
+  }
+
+  // this function is used to be passed to the GamePeer object.
+  remoteEventListener(data: any): void {
+
+    // Reverse Role
+    const cRole = (i: Player) => i === Alice ? Bob : Alice;
+
+    const event = JSON.parse(data) as Event;
+    switch (event.type) {
+      case "addCard": {
+        const e = event as EventAddCard;
+        this.addToDeck(cRole(e.deckPosition.deckIndex), e.cardInfo, e.deckPosition.cardIndex, false);
+        break;
+      }
+      case "removeCard": {
+        const e = event as EventRemoveCard;
+        this.removeFromDeck(cRole(e.deckPosition.deckIndex), e.cardInfo, false);
+        break;
+      }
+      case "adjustDeckSize": {
+        const e = event as EventAdjustDeckSize;
+        this.adjustDeckSize(e.rows, e.columns, false);
+        break;
+      }
+      case "confirmStart": {
+        this.confirmations.start.ok[Bob] = true;
+        if (this.confirmations.start.all(this.hasOpponent())) {
+          this.confirmations.start = new GameConfirmation();
+          this.countdownNextTurn(true);
+          this.g().notifyStartGame();
+        }
+        break;
+      }
+      case "confirmNext": {
+        this.confirmations.next.ok[Bob] = true;
+        if (this.confirmations.next.all(this.hasOpponent())) {
+          this.confirmations.next = new GameConfirmation();
+          this.finishTurn();
+          this.countdownNextTurn();
+        }
+        break;
+      }
+      case "pickEvent": {
+        const e = event as EventPickEvent;
+        this.notifyPickEvent(new PickEvent(
+          e.pickEvent.timestamp,
+          cRole(e.pickEvent.player),
+          e.pickEvent.cardInfo,
+        ), false);
+        break;
+      }
+    }
   }
 
 }
@@ -519,8 +703,10 @@ export {
   CardInfo,
   PickEvent,
   OpponentType,
+  GamePeer,
 };
 export type {
   OuterRefObject,
   Player,
+  DeckPosition,
 };
