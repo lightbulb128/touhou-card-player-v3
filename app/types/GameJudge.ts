@@ -174,6 +174,11 @@ type EventSyncSettings = {
   deckRows: number;
 }
 
+type EventNotifyName = {
+  type: "notifyName";
+  name: string;
+}
+
 // reverse the sync data (swap players)
 const reverseSyncData = (data: SyncData): SyncData => {
   const reconstructCardInfo = (d: CardInfo): CardInfo => {
@@ -210,7 +215,8 @@ type Event = (
   EventConfirmNext | EventPickEvent |
   EventSyncWinnerDetermined | EventSyncStart | EventSyncNextTurn |
   EventStopGame | EventSwitchTraditionalMode | EventPauseMusic | EventResumeMusic |
-  EventGive | EventSyncSettings | EventFilterMusicByDeck
+  EventGive | EventSyncSettings | EventFilterMusicByDeck |
+  EventNotifyName
 ); 
 
 class GamePeer {
@@ -343,6 +349,8 @@ class GameJudge {
 
   // variables
   isServer: boolean;
+  myName: string;
+  opponentName: string;
   opponentType: OpponentType;
   traditionalMode: boolean;
   state: GameJudgeState;
@@ -406,6 +414,8 @@ class GameJudge {
   }
 
   constructor(outerRef: RefObject<OuterRefObject>) {
+    this.myName = "Player";
+    this.opponentName = "Opponent";
     this.traditionalMode = false; 
     this.isServer = true;
     this.opponentType = OpponentType.None;
@@ -1351,6 +1361,12 @@ class GameJudge {
       }
       case "filterMusicByDeck": {
         this.filterMusicByDeck();
+        break;
+      }
+      case "notifyName": {
+        const e = event as EventNotifyName;
+        this.opponentName = e.name;
+        this.g().refresh(this);
         break;
       }
     }

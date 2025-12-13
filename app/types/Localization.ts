@@ -80,7 +80,7 @@ const Localization = {
   ),
 
   GameConnectShareCodeInstruction: u(
-    "Share this code with your friend to let them join your game. If the generation exceeds 10 secs, please retry.",
+    "Share this code with your friend to let them join your game. Retry if generation exeeds 10s.",
     "将此代码分享给你的朋友以让他们加入你的游戏。如果生成时间超过10秒，请点击重试。"
   ),
   GameConnectEnterCodeInstruction: u(
@@ -107,6 +107,12 @@ const Localization = {
     "Connect",
     "连接"
   ),
+  GameConnectionMyName: u(
+    "Your name to display to the opponent:",
+    "向对方展示的你的名称："
+  ),
+  GamePlayer: u("Player", "玩家"),
+  GameOpponent: u("Opponent", "对手"),
 
 
   GameModeTraditional: u("Classic Mode", "传统模式"),

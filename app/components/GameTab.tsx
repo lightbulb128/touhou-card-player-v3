@@ -157,7 +157,7 @@ export default function GameTab({
   const [hoveringCardInfo, setHoveringCardInfo] = useState<CardInfo | null>(null);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [remotePlayerIdInput, setRemotePlayerIdInput] = useState<string>("");
-  const [peerError, setPeerError] = useState<string>("");
+  const [peerError, setPeerError] = useState<string>("")
   const [timerState, setTimerState] = useState<TimerState>({ 
     type: "zero", referenceTimestamp: 0, time: 0,
     intervalHandle: null
@@ -185,17 +185,18 @@ export default function GameTab({
 
   const canvasSpacing = 6;
   const canvasMargin = 16;
-  const canvasWidth = (containerRef.current ? containerRef.current.clientWidth : 800) - canvasMargin * 2;
+  const canvasWidth = (containerRef.current ? containerRef.current.clientWidth : 800);
   const cardWidth = canvasWidth * cardWidthPercentage;
   const cardHeight = cardWidth / CardAspectRatio;
   const hasOpponent = judge.opponentType !== OpponentType.None;
   const isRemotePlayerOpponent = judge.opponentType === OpponentType.RemotePlayer;
   const isServer = !isRemotePlayerOpponent || judge.isServer;
   const isClient = isRemotePlayerOpponent && !judge.isServer;
+  const playerNameHeight = isRemotePlayerOpponent ? 32 : 0;
   const opponentCollectedTop = canvasMargin;
-  let opponentDeckTop = canvasMargin;
+  let opponentDeckTop = canvasMargin + playerNameHeight;
   if (hasOpponent && judge.state !== GameJudgeState.SelectingCards) {
-    opponentDeckTop += cardHeight + canvasSpacing + canvasMargin;
+    opponentDeckTop = canvasMargin + cardHeight + canvasSpacing + playerNameHeight + 16;
   }
   const deckColumns = judge.deckColumns; const deckRows = judge.deckRows;
   const deckWidth = deckColumns * cardWidth + (deckColumns - 1) * canvasSpacing;
@@ -214,7 +215,7 @@ export default function GameTab({
   const middleBarBottom = middleBarTop + middleBarHeight;
   const playerDeckTop = middleBarBottom + canvasSpacing;
   const playerDeckBottom = playerDeckTop + deckHeight;
-  const playerCollectedTop = playerDeckBottom + canvasSpacing + canvasMargin;
+  const playerCollectedTop = playerDeckBottom + canvasSpacing + playerNameHeight + canvasSpacing + 16;
   let canvasHeight = playerDeckBottom;
   if (judge.state !== GameJudgeState.SelectingCards) {
     canvasHeight = playerCollectedTop + cardHeight + canvasMargin;
@@ -274,6 +275,10 @@ export default function GameTab({
       judge.resetGameState();
       setJudge(judge.reconstruct());
     } 
+    peer.sendEvent({
+      type: "notifyName",
+      name: judge.myName
+    })
   }
   
   // region utility funcs
@@ -548,6 +553,22 @@ export default function GameTab({
   useEffect(() => {
     updateUnusedCards();
   }, [data, musicSelection, judge, dragInfo]);
+
+  useEffect(() => {
+    // save to local storage
+    if (judge.myName !== "Player") {
+      localStorage.setItem("myName", judge.myName);
+    }
+  }, [judge.myName])
+
+  useEffect(() => {
+    // load myname from local storage
+    const storedName = localStorage.getItem("myName");
+    if (storedName && storedName.length > 0 && storedName !== "Player") {
+      judge.myName = storedName;
+      setJudge(judge => judge.reconstruct());
+    }
+  }, [])
   
   // calculate anchor positions
   const toDeckCardPosition = (deckIndex: 0 | 1, cardIndex: number): Position => {
@@ -1766,6 +1787,34 @@ export default function GameTab({
               justifyContent: "center",
             }}
           >
+            
+            <Typography 
+              key="player-name-text"
+              variant="body1"
+              sx={{
+                userSelect: "none",
+                textAlign: "left",
+                width: "100%",
+                paddingLeft: "4px",
+                fontFamily: NoFontFamily,
+              }}
+            >
+              {GetLocalizedString(Localization.GameConnectionMyName)}
+            </Typography>
+            <TextField
+              size="small"
+              sx={{ 
+                width: "100%",
+              }}
+              slotProps={{
+                input: { style: { fontFamily: NoFontFamily } }
+              }}
+              value={judge.myName}
+              onChange={(e) => {
+                judge.myName = e.target.value;
+                setJudge(judge.reconstruct());
+              }}
+            />
             <Typography 
               variant="body1"
               sx={{
@@ -2216,6 +2265,71 @@ export default function GameTab({
     }
   }
 
+  // player names
+  {
+    { // self name
+      const shown = isRemotePlayerOpponent;
+      let y = playerDeckBottom;
+      if (judge.state === GameJudgeState.SelectingCards) {
+        y += canvasMargin + buttonSize + canvasSpacing;
+      } else {
+        y += canvasSpacing;
+      }
+      let x = canvasWidth - deckLeft - deckWidth;
+      if (judge.state !== GameJudgeState.SelectingCards) {
+        x = canvasMargin;
+      }
+      otherElements.push(
+        <Typography 
+          key="player-name-text"
+          variant="h6"
+          sx={{
+            userSelect: "none",
+            position: "absolute",
+            right: `${x}px`,
+            top: `${y}px`,
+            opacity: shown ? 1.0 : 0.0,
+            transition: "right 0.3s ease, top 0.3s ease, opacity 0.3s ease",
+            fontFamily: NoFontFamily,
+            textAlign: "right",
+            width: deckWidth,
+          }}
+        >
+          {GetLocalizedString(Localization.GamePlayer)} {judge.myName}
+        </Typography>
+      );
+      if (y + playerNameHeight + canvasMargin > canvasHeight) {
+        canvasHeight = y + playerNameHeight + canvasMargin;
+      }
+    }
+    { // opponent name
+      const shown = isRemotePlayerOpponent && peer.hasDataConnection();
+      const y = opponentDeckTop - playerNameHeight - canvasSpacing;
+      let x = deckLeft;
+      if (judge.state !== GameJudgeState.SelectingCards) {
+        x = canvasMargin;
+      }
+      otherElements.push(
+        <Typography 
+          key="opponent-name-text"
+          variant="h6"
+          sx={{
+            userSelect: "none",
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            opacity: shown ? 1.0 : 0.0,
+            transition: "left 0.3s ease, top 0.3s ease, opacity 0.3s ease",
+            fontFamily: NoFontFamily,
+          }}
+        >
+          {GetLocalizedString(Localization.GameOpponent)} {judge.opponentName}
+        </Typography>
+      );
+    }
+  }
+
+  // region final render
   return (
     <Box>
       <Box
