@@ -44,6 +44,7 @@ export default function Home() {
   // refs
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const countdownAudioElementRef = useRef<HTMLAudioElement | null>(null);
+  const audioUpdateTimestampRef = useRef<number>(0);
 
   // states
   const [globalDataLoadedFlag, setGlobalDataLoadedFlag] = useState<boolean>(false);
@@ -524,12 +525,15 @@ export default function Home() {
           }
           onTimeUpdate={
             () => {
-              // set playback.currentTime
               if (audioElementRef.current) {
-                setPlayback({
-                  ...playback,
-                  currentTime: audioElementRef.current!.currentTime,
-                });
+                // don't update too frequently
+                if (Date.now() - audioUpdateTimestampRef.current > 1000) {
+                  audioUpdateTimestampRef.current = Date.now();
+                  setPlayback({
+                    ...playback,
+                    currentTime: audioElementRef.current!.currentTime,
+                  });
+                }
               }
             }
           }

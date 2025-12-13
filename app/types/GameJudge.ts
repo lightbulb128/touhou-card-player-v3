@@ -158,6 +158,10 @@ type EventResumeMusic = {
   type: "resumeMusic";
 };
 
+type EventFilterMusicByDeck = {
+  type: "filterMusicByDeck";
+};
+
 type EventSyncSettings = {
   type: "syncSettings";
   traditionalMode: boolean;
@@ -214,7 +218,7 @@ type Event = (
   EventConfirmNext | EventPickEvent |
   EventSyncWinnerDetermined | EventSyncStart | EventSyncNextTurn |
   EventStopGame | EventSwitchTraditionalMode | EventPauseMusic | EventResumeMusic |
-  EventGive | EventSyncSettings
+  EventGive | EventSyncSettings | EventFilterMusicByDeck
 ); 
 
 class GamePeer {
@@ -409,8 +413,8 @@ class GameJudge {
     this.turnWinner = null;
     this.countdownTimeout = null;
     this.outerRef = outerRef;
-    this.deckRows = 1;
-    this.deckColumns = 6;
+    this.deckRows = 3;
+    this.deckColumns = 8;
     this.deck = [[], []];
     for (let i = 0; i < this.deckRows * this.deckColumns; i++) {
       this.deck[Alice].push(new CardInfo(null, 0));
@@ -1099,6 +1103,46 @@ class GameJudge {
     }
   }
 
+  isMusicFilteredByDeck(): boolean {
+    // check all cards that is not inside deck is disabled in temporary
+    const playingOrder = this.playingOrder();
+    const characterTemporaryDisabled = this.characterTemporaryDisabled();
+    const inDeck = new Set<CharacterId>();
+    for (let player of [Alice, Bob]) {
+      for (let cardInfo of this.deck[player]) {
+        if (cardInfo.characterId !== null) {
+          inDeck.add(cardInfo.characterId);
+        }
+      }
+    }
+    for (let characterId of playingOrder) {
+      const isDisabled = characterTemporaryDisabled.get(characterId) || false;
+      const isInDeck = inDeck.has(characterId);
+      if (!isInDeck && !isDisabled) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  filterMusicByDeck = () => {
+    // disable all characters that are not in deck
+    const playingOrder = this.playingOrder();
+    const inDeck = new Set<CharacterId>();
+    for (let player of [Alice, Bob]) {
+      for (let cardInfo of this.deck[player]) {
+        if (cardInfo.characterId !== null) {
+          inDeck.add(cardInfo.characterId);
+        }
+      }
+    }
+    const newTemporaryDisabled: Map<CharacterId, boolean> = new Map<CharacterId, boolean>();
+    for (let characterId of playingOrder) {
+      const isInDeck = inDeck.has(characterId);
+      newTemporaryDisabled.set(characterId, !isInDeck);
+    }
+    this.g().setCharacterTemporaryDisabled(newTemporaryDisabled);
+  }
 
   // this function is used to be passed to the GamePeer object.
   remoteEventListener(data: any): void {
@@ -1278,6 +1322,10 @@ class GameJudge {
         this.deckColumns = e.deckColumns;
         this.resetGameState();
         this.g().refresh(this);
+        break;
+      }
+      case "filterMusicByDeck": {
+        this.filterMusicByDeck();
         break;
       }
     }

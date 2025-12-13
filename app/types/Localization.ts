@@ -54,6 +54,7 @@ const Localization = {
   GameRandomFill: u("Random Fill", "随机补满"),
   GameClearDeck: u("Clear Deck", "清空卡组"),
   GameShuffleDeck: u("Shuffle Deck", "打乱卡组"),
+  GameFilterByDeck: u("Filter Music by Deck", "按卡组筛选音乐"),
   
   GameOpponentNoOpponent: u("No Opponent", "无对手"),
   GameOpponentCPUOpponent: u("CPU Opponent", "电脑对手"),

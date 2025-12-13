@@ -16,7 +16,7 @@ import {
   SkipNextRounded, PauseRounded, PlayArrowRounded, EastRounded, WestRounded,
   StopRounded, GroupsRounded, SmartToyRounded, PersonOffRounded,
   AddRounded, RemoveRounded, Casino, ClearRounded, ShuffleRounded,
-  ClassRounded, StarRounded,
+  ClassRounded, StarRounded, FilterList,
   StartRounded
 } from "@mui/icons-material";
 import { GameButton } from "./GameTabControls";
@@ -1228,6 +1228,34 @@ export default function GameTab({
         </GameButton>
       );
       y += buttonSize + canvasSpacing;
+    }
+    { // filter by deck
+      const hidden = !(
+        judge.state !== GameJudgeState.SelectingCards &&
+        judge.state !== GameJudgeState.TurnCountdownNext
+      )
+      const disabled = judge.isMusicFilteredByDeck();
+      otherElements.push(
+        <GameButton 
+          key="filter-by-deck-button"
+          text={GetLocalizedString(Localization.GameFilterByDeck)}
+          onClick={() => {
+            judge.filterMusicByDeck();
+            if (isRemotePlayerOpponent) {
+              sendEvent({ type: "filterMusicByDeck" });
+            }
+            setJudge(judge.reconstruct());
+          }}
+          disabled={disabled}
+          hidden={hidden}
+          sx={{
+            position: "absolute", left: `${x}px`, top: `${y}px`,
+          }}
+        >
+          <FilterList></FilterList>
+        </GameButton>
+      );
+      if (!hidden) y += buttonSize + canvasSpacing;
     }
     { // start button
       // region start but
