@@ -1,6 +1,7 @@
 import { Box, Paper, Stack, SxProps } from "@mui/material";
-import { CharacterId, GlobalData, CardAspectRatio } from "../types/Configs";
+import { CardAspectRatio } from "../types/Configs";
 import { PagePRNG } from "../types/PagePrng";
+import Image from "next/image";
 
 const CardCollectionPrefix: Map<string, string> = new Map([
 	["dairi-sd", "https://r2bucket-touhou.hgjertkljw.org/cards/"],
@@ -47,7 +48,7 @@ export interface CharacterCardProps {
 	paperElevation?: number;
 	paperVariant?: "elevation" | "outlined";
 	upsideDown?: boolean;
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 export function CharacterCard({
@@ -149,22 +150,30 @@ export function CharacterCard({
 			}}
 			>
 				{!isPlaceholder && (
-					<img
-						src={cardSourcePrefix + cardSource}
-						alt="Character Card"
-						draggable="false"
-						style={{
+					<Box
+						sx={{
+							width: '100%',
+							height: '100%',
+							objectFit: 'cover',
 							position: 'absolute',
 							top: 0,
 							left: 0,
-							width: '100%',
-							height: 'auto',
-							objectFit: 'cover',
-							userSelect: 'none',
-							transition: 'filter 0.3s ease',
-							filter: isGrayscale ? 'grayscale(100%)' : 'none',
 						}}
-					/>
+					>
+						<Image
+							src={cardSourcePrefix + cardSource}
+							alt="Character Card"
+							draggable="false"
+							unoptimized
+							fill
+							sizes="100vw"
+							style={{
+								userSelect: 'none',
+								transition: 'filter 0.3s ease',
+								filter: isGrayscale ? 'grayscale(100%)' : 'none',
+							}}
+						/>
+					</Box>
 				)}
 			</Box>
 		</Paper>

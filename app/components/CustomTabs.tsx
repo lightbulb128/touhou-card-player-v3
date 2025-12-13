@@ -7,7 +7,7 @@ export interface CustomTabsProps {
 }
 
 export default function CustomTabs({
-  activeTab, onChange, innerTabs
+  activeTab, innerTabs
 }: CustomTabsProps) {
   return (
     <Box

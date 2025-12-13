@@ -1,5 +1,5 @@
 import { RefObject } from "react";
-import { CharacterId, GlobalData, MusicSelectionMap } from "./Configs";
+import { CharacterId, GlobalData, MusicSelectionMap, PlaybackSetting } from "./Configs";
 import Peer, { DataConnection } from "peerjs";
 
 const Alice = 0; // Alice is always the local host
@@ -130,6 +130,9 @@ type EventSyncWinnerDetermined = {
 type EventSyncStart = {
   type: "syncStart";
   data: SyncData;
+  traditionalMode: boolean;
+  randomStartPosition: boolean;
+  playbackDuration: number;
 }
 
 type EventSyncNextTurn = {
@@ -171,17 +174,6 @@ type EventSyncSettings = {
   deckRows: number;
 }
 
-const hashSyncData = (data: SyncData): number => {
-  let str = JSON.stringify(data);
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0; // Convert to 32bit integer
-  }
-  return hash;
-}
-
 // reverse the sync data (swap players)
 const reverseSyncData = (data: SyncData): SyncData => {
   const reconstructCardInfo = (d: CardInfo): CardInfo => {
@@ -189,7 +181,7 @@ const reverseSyncData = (data: SyncData): SyncData => {
   };
   const reconstructCardArray = (d: Array<CardInfo>): Array<CardInfo> => {
     const newArray: Array<CardInfo> = [];
-    for (let cardInfo of d) {
+    for (const cardInfo of d) {
       newArray.push(reconstructCardInfo(cardInfo));
     }
     return newArray;
@@ -227,6 +219,7 @@ class GamePeer {
   refresh: () => void;
   notifyDisconnected: () => void;
   notifyConnected: (peer: GamePeer) => void;
+  notifyPeerError: (message: string) => void;
 
   constructor() {
     this.peer = null;
@@ -234,6 +227,7 @@ class GamePeer {
     this.refresh = () => {};
     this.notifyDisconnected = () => {};
     this.notifyConnected = () => {};
+    this.notifyPeerError = () => {};
   }
 
   disconnect() {
@@ -245,13 +239,18 @@ class GamePeer {
 
   connectToPeer(peerId: string) {
     this.ensurePeerNotNull();
-    this.dataConnection = this.peer!.connect(peerId);
-    this.dataConnection.on("open", () => {
+    const dataConnection = this.peer!.connect(peerId);
+    dataConnection.on("error", (err) => {
+      console.error("[GamePeer] DataConnection error:", err);
+      this.notifyPeerError(`DataConnection error: ${err}`);
+    });
+    dataConnection.on("open", () => {
+      this.dataConnection = dataConnection;
       this.notifyConnected(this);
       this.refresh();
     });
-    this.dataConnection.on("close", () => {
-      this.dataConnection?.removeAllListeners("data");
+    dataConnection.on("close", () => {
+      dataConnection?.removeAllListeners("data");
       this.dataConnection = null;
       this.notifyDisconnected();
     });
@@ -266,8 +265,9 @@ class GamePeer {
       this.peer = new Peer();
       this.peer.on("error", (err) => {
         console.error("[GamePeer] Peer error:", err);
+        this.notifyPeerError(`Peer error: ${err}`);
       });
-      this.peer.on("open", (id: string) => {
+      this.peer.on("open", (_: string) => {
         this.refresh();
       });
       this.peer.on("connection", (conn: DataConnection) => {
@@ -287,6 +287,8 @@ class GamePeer {
       this.peer.on("disconnected", () => {
         this.dataConnection?.removeAllListeners("data");
         this.dataConnection = null;
+        // remove peer so that a new one can be created
+        this.peer = null;
       });
     }
   }
@@ -305,7 +307,7 @@ class GamePeer {
     this.dataConnection!.send(JSON.stringify(payload));
   }
 
-  resetListener(ondata: (data: any) => void) {
+  resetListener(ondata: (data: unknown) => void) {
     if (this.dataConnection) {
       this.dataConnection.removeAllListeners("data");
       this.dataConnection.on("data", ondata);
@@ -321,11 +323,13 @@ type OuterRefObject = {
   characterTemporaryDisabled: Map<CharacterId, boolean>;
   currentCharacterId: CharacterId;
   musicSelection: Map<CharacterId, number>;
+  playbackSetting: PlaybackSetting,
   peer: GamePeer;
   setPlayingOrder: (order: Array<CharacterId>) => void;
   setCharacterTemporaryDisabled: (map: Map<CharacterId, boolean>) => void;
   setMusicSelection: (map: MusicSelectionMap) => void;
   setCurrentCharacterId: (id: CharacterId) => void;
+  setPlaybackSetting: (setting: PlaybackSetting) => void;
   notifyTurnWinnerDetermined: (winner: Player | null) => void;
   notifyTurnStarted: (characterId: CharacterId) => void;
   notifyStartGame: (order: Array<CharacterId> | null) => Array<CharacterId>; // return the new playing order
@@ -413,8 +417,8 @@ class GameJudge {
     this.turnWinner = null;
     this.countdownTimeout = null;
     this.outerRef = outerRef;
-    this.deckRows = 3;
-    this.deckColumns = 8;
+    this.deckRows = 1;
+    this.deckColumns = 6;
     this.deck = [[], []];
     for (let i = 0; i < this.deckRows * this.deckColumns; i++) {
       this.deck[Alice].push(new CardInfo(null, 0));
@@ -431,7 +435,7 @@ class GameJudge {
     this.deckRows = rows;
     this.deckColumns = columns;
     const newSize = rows * columns;
-    for (let player of [Alice, Bob]) {
+    for (const player of [Alice, Bob]) {
       const currentDeck = this.deck[player];
       if (currentDeck.length > newSize) {
         this.deck[player] = currentDeck.slice(0, newSize);
@@ -456,8 +460,8 @@ class GameJudge {
       selectableCharacters.add(characterId);
     });
     // remove that are already in deck
-    this.deck.forEach((deck, deckPlayer) => {
-      deck.forEach((cardInfo, index) => {
+    this.deck.forEach((deck, _deckPlayer) => {
+      deck.forEach((cardInfo, _index) => {
         if (cardInfo.characterId !== null) {
           selectableCharacters.delete(cardInfo.characterId);
         }
@@ -487,7 +491,7 @@ class GameJudge {
 
   shuffleDeck(player: Player, send: boolean): void {
     const filledCards: Array<CardInfo> = [];
-    for (let cardInfo of this.deck[player]) {
+    for (const cardInfo of this.deck[player]) {
       if (cardInfo.characterId !== null) {
         filledCards.push(cardInfo);
         this.removeFromDeck(player, cardInfo, send);
@@ -647,6 +651,9 @@ class GameJudge {
         this.g().peer.sendEvent({
           type: "syncStart",
           data: syncData,
+          traditionalMode: this.traditionalMode,
+          randomStartPosition: this.g().playbackSetting.randomStartPosition,
+          playbackDuration: this.g().playbackSetting.playbackDuration,
         });
       }
       return; 
@@ -699,7 +706,7 @@ class GameJudge {
     }
     const currentCharacterId = this.currentCharacterId();
     let net = 0;
-    for (let event of this.pickEvents) {
+    for (const event of this.pickEvents) {
       // for each wrong pick, if Alice, net - 1, if Bob, net + 1
       if (event.characterId() !== currentCharacterId) {
         if (event.player === Alice) {
@@ -722,7 +729,7 @@ class GameJudge {
     if (net > 0) {
       // check how many empty slots Bob has. if less than net, limit to that.
       let emptySlots = 0;
-      for (let cardInfo of this.deck[Bob]) {
+      for (const cardInfo of this.deck[Bob]) {
         if (cardInfo.characterId === null) {
           emptySlots += 1;
         }
@@ -730,7 +737,7 @@ class GameJudge {
       net = Math.min(net, emptySlots);
       // check how many cards Alice has. if less than net, limit to that.
       let cardCount = 0;
-      for (let cardInfo of this.deck[Alice]) {
+      for (const cardInfo of this.deck[Alice]) {
         if (cardInfo.characterId !== null) {
           cardCount += 1;
         }
@@ -740,7 +747,7 @@ class GameJudge {
     if (net < 0) {
       // check how many empty slots Alice has. if less than -net, limit to that.
       let emptySlots = 0;
-      for (let cardInfo of this.deck[Alice]) {
+      for (const cardInfo of this.deck[Alice]) {
         if (cardInfo.characterId === null) {
           emptySlots += 1;
         }
@@ -748,11 +755,12 @@ class GameJudge {
       net = Math.max(net, -emptySlots);
       // check how many cards Bob has. if less than -net, limit to that.
       let cardCount = 0;
-      for (let cardInfo of this.deck[Bob]) {
+      for (const cardInfo of this.deck[Bob]) {
         if (cardInfo.characterId !== null) {
           cardCount += 1;
         }
       }
+      net = Math.max(net, -cardCount);
     }
     this.givesLeft = net;
     console.log("givesleft = ", this.givesLeft);
@@ -771,7 +779,7 @@ class GameJudge {
     this.sortPickEvents();
     // check if the winner is determined (someone picked the current characterId)
     let winnerFound = false;
-    for (let event of this.pickEvents) {
+    for (const event of this.pickEvents) {
       if (event.characterId() === currentCharacterId) {
         this.turnWinner = event.player;
         winnerFound = true;
@@ -784,8 +792,8 @@ class GameJudge {
       // collect card to collected
       if (this.turnWinner !== null) {
         let found = null;
-        for (let deckPlayer of [Alice, Bob]) {
-          for (let cardInfo of this.deck[deckPlayer]) {
+        for (const deckPlayer of [Alice, Bob]) {
+          for (const cardInfo of this.deck[deckPlayer]) {
             if (cardInfo.characterId === currentCharacterId) {
               this.collectedCards[this.turnWinner].push(cardInfo);
               found = cardInfo;
@@ -832,7 +840,7 @@ class GameJudge {
   }
 
   isDeckFull(player: Player): boolean {
-    for (let cardInfo of this.deck[player]) {
+    for (const cardInfo of this.deck[player]) {
       if (cardInfo.characterId === null) {
         return false;
       }
@@ -841,7 +849,7 @@ class GameJudge {
   }
 
   isDeckEmpty(player: Player): boolean {
-    for (let cardInfo of this.deck[player]) {
+    for (const cardInfo of this.deck[player]) {
       if (cardInfo.characterId !== null) {
         return false;
       }
@@ -914,8 +922,8 @@ class GameJudge {
     if (this.givesLeft != 0) {
       // process gives arbitrarily for CPU
       let givesLeft = this.givesLeft;
-      let giver: Player = givesLeft > 0 ? Alice : Bob;
-      let receiver: Player = givesLeft > 0 ? Bob : Alice;
+      const giver: Player = givesLeft > 0 ? Alice : Bob;
+      const receiver: Player = givesLeft > 0 ? Bob : Alice;
       givesLeft = Math.abs(givesLeft);
       while (givesLeft > 0) {
         const fromIndices: number[] = [];
@@ -961,7 +969,7 @@ class GameJudge {
       // check if the correct answer is in the deck. if so, remove it.
       const currentCharacterId = this.currentCharacterId();
       let correctCardOnSide: Player | null = null;
-      for (let player of [Alice, Bob]) {
+      for (const player of [Alice, Bob]) {
         for (let i = 0; i < this.deck[player].length; i++) {
           const cardInfo = this.deck[player][i];
           if (cardInfo.characterId === currentCharacterId) {
@@ -1069,8 +1077,8 @@ class GameJudge {
     const currentCharacterId = this.currentCharacterId();
     if (!mistake) {
       // pick the correct card from any deck
-      for (let player of [Alice, Bob]) {
-        for (let cardInfo of this.deck[player]) {
+      for (const player of [Alice, Bob]) {
+        for (const cardInfo of this.deck[player]) {
           if (cardInfo.characterId === currentCharacterId) {
             this.notifyPickEvent(new PickEvent(
               Date.now(),
@@ -1084,8 +1092,8 @@ class GameJudge {
     } else {
       // pick a wrong card from any deck
       const selectableCardInfos: Array<CardInfo> = [];
-      for (let player of [Alice, Bob]) {
-        for (let cardInfo of this.deck[player]) {
+      for (const player of [Alice, Bob]) {
+        for (const cardInfo of this.deck[player]) {
           if (cardInfo.characterId !== null && cardInfo.characterId !== currentCharacterId) {
             selectableCardInfos.push(cardInfo);
           }
@@ -1108,14 +1116,19 @@ class GameJudge {
     const playingOrder = this.playingOrder();
     const characterTemporaryDisabled = this.characterTemporaryDisabled();
     const inDeck = new Set<CharacterId>();
-    for (let player of [Alice, Bob]) {
-      for (let cardInfo of this.deck[player]) {
+    for (const player of [Alice, Bob]) {
+      for (const cardInfo of this.deck[player]) {
+        if (cardInfo.characterId !== null) {
+          inDeck.add(cardInfo.characterId);
+        }
+      }
+      for (const cardInfo of this.collectedCards[player]) {
         if (cardInfo.characterId !== null) {
           inDeck.add(cardInfo.characterId);
         }
       }
     }
-    for (let characterId of playingOrder) {
+    for (const characterId of playingOrder) {
       const isDisabled = characterTemporaryDisabled.get(characterId) || false;
       const isInDeck = inDeck.has(characterId);
       if (!isInDeck && !isDisabled) {
@@ -1125,19 +1138,24 @@ class GameJudge {
     return true;
   }
 
-  filterMusicByDeck = () => {
+  filterMusicByDeck() {
     // disable all characters that are not in deck
     const playingOrder = this.playingOrder();
     const inDeck = new Set<CharacterId>();
-    for (let player of [Alice, Bob]) {
-      for (let cardInfo of this.deck[player]) {
+    for (const player of [Alice, Bob]) {
+      for (const cardInfo of this.deck[player]) {
+        if (cardInfo.characterId !== null) {
+          inDeck.add(cardInfo.characterId);
+        }
+      }
+      for (const cardInfo of this.collectedCards[player]) {
         if (cardInfo.characterId !== null) {
           inDeck.add(cardInfo.characterId);
         }
       }
     }
     const newTemporaryDisabled: Map<CharacterId, boolean> = new Map<CharacterId, boolean>();
-    for (let characterId of playingOrder) {
+    for (const characterId of playingOrder) {
       const isInDeck = inDeck.has(characterId);
       newTemporaryDisabled.set(characterId, !isInDeck);
     }
@@ -1145,7 +1163,7 @@ class GameJudge {
   }
 
   // this function is used to be passed to the GamePeer object.
-  remoteEventListener(data: any): void {
+  remoteEventListener(data: unknown): void {
 
     // Reverse Role
     const cRole = (i: Player) => i === Alice ? Bob : Alice;
@@ -1160,7 +1178,7 @@ class GameJudge {
       const newOrder: Array<CharacterId> = [];
       const newMusicSelection: Map<CharacterId, number> = new Map<CharacterId, number>();
       const newTemporaryDisabled: Map<CharacterId, boolean> = new Map<CharacterId, boolean>();
-      for (let item of data.order) {
+      for (const item of data.order) {
         newOrder.push(item.characterId);
         newMusicSelection.set(item.characterId, item.musicSelection);
         newTemporaryDisabled.set(item.characterId, item.temporaryDisabled);
@@ -1190,7 +1208,7 @@ class GameJudge {
         if (currentMusicSelection.size !== newMusicSelection.size) {
           same = false;
         } else {
-          for (let [key, value] of currentMusicSelection) {
+          for (const [key, value] of currentMusicSelection) {
             if (newMusicSelection.get(key) !== value) {
               same = false;
               break;
@@ -1208,7 +1226,7 @@ class GameJudge {
         if (currentTemporaryDisabled.size !== newTemporaryDisabled.size) {
           same = false;
         } else {
-          for (let [key, value] of currentTemporaryDisabled) {
+          for (const [key, value] of currentTemporaryDisabled) {
             if (newTemporaryDisabled.get(key) !== value) {
               same = false;
               break;
@@ -1225,7 +1243,7 @@ class GameJudge {
       }
     }
 
-    const event = JSON.parse(data) as Event;
+    const event = JSON.parse(data as string) as Event;
     console.log("[GameJudge] Received event:", event);
     switch (event.type) {
       case "addCard": {
@@ -1286,6 +1304,12 @@ class GameJudge {
         } else if (event.type === "syncStart") {
           this.clientWaitAcknowledge = false;
           e = event as EventSyncStart;
+          this.traditionalMode = e.traditionalMode;
+          this.g().setPlaybackSetting({
+            ...this.g().playbackSetting,
+            randomStartPosition: e.randomStartPosition,
+            playbackDuration: e.playbackDuration,
+          })
         } else {
           this.clientWaitAcknowledge = false;
           e = event as EventSyncNextTurn;
@@ -1314,6 +1338,7 @@ class GameJudge {
           this.givesLeft += 1;
           this.g().refresh(this);
         }
+        break;
       }
       case "syncSettings": {
         const e = event as EventSyncSettings;

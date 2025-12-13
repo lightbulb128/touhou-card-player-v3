@@ -1,5 +1,5 @@
-import { Box, Button, Collapse, Divider, FormControl, Grid, IconButton, InputLabel, MenuItem, Paper, Select, Stack, TextField, Typography } from "@mui/material";
-import { AddRounded, RemoveRounded, Task } from "@mui/icons-material";
+import { Box, Button, Collapse, Divider, FormControl, Grid, MenuItem, Paper, Select, Stack, TextField, Typography } from "@mui/material";
+import { AddRounded, RemoveRounded } from "@mui/icons-material";
 import { CharacterId, getMusicInfo, GlobalData, MusicSelectionMap } from "../types/Configs";
 import { Dispatch, useState } from "react";
 import { CardCollections, DefaultMusicSource, MusicSources } from "../types/Consts";
@@ -11,7 +11,7 @@ import {
   CheckBox as FullIcon,
   Search
 } from "@mui/icons-material";
-import { MonospaceFontFamily, NoFontFamily } from "./Theme";
+import { NoFontFamily } from "./Theme";
 import { GetLocalizedString, Localization } from "../types/Localization";
 
 interface ConfigDrawerProps {
@@ -298,7 +298,7 @@ export default function ConfigTab(props: ConfigTabProps) {
           <Stack direction="column" spacing={1}
             sx={{width: "100%"}}
           >
-            {Array.from(presets).map(([name, selectionMap], index) => {
+            {Array.from(presets).map(([name, selectionMap], _index) => {
               let fullyApplied = true;
               let partiallyApplied = false;
               for (const [charId, musicId] of Array.from(selectionMap)) {

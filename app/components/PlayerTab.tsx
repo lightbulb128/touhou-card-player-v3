@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Button, Grid, Stack, TextField, Typography } from "@mui/material";
+import { Box, Button, Stack, TextField, Typography } from "@mui/material";
 import { 
   CharacterId, createPlayingOrder, 
   getMusicInfoFromCharacterId, GlobalData, 
@@ -58,7 +58,7 @@ export default function PlayerTab({
   if (currentIndex === -1) {
     currentIndex = 0;
   }
-  let placeholderCardSource = data.getAnyCardSource();
+  const placeholderCardSource = data.getAnyCardSource();
 
   useEffect(() => {
     const handleResize = () => {

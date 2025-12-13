@@ -1,5 +1,5 @@
 import { SxProps, Typography } from "@mui/material";
-import { Box, Stack } from "@mui/system";
+import { Stack } from "@mui/system";
 import { IconButton } from "@mui/material";
 import { NoFontFamily, theme } from "./Theme";
 
@@ -46,6 +46,7 @@ export function GameButton({
   if (props.contained === undefined) {
     props.contained = false;
   }
+  if (props.hidden) {props.disabled = true;}
   return (
     <Stack 
       direction={props.textOnLeft ? "row-reverse" : "row"}

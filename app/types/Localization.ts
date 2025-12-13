@@ -80,8 +80,8 @@ const Localization = {
   ),
 
   GameConnectShareCodeInstruction: u(
-    "Share this code with your friend to let them join your game:",
-    "将此代码分享给你的朋友以让他们加入你的游戏："
+    "Share this code with your friend to let them join your game. If the generation exceeds 10 secs, please retry.",
+    "将此代码分享给你的朋友以让他们加入你的游戏。如果生成时间超过10秒，请点击重试。"
   ),
   GameConnectEnterCodeInstruction: u(
     "Enter the share code provided by your friend to join their game:",

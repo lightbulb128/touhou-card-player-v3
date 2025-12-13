@@ -3,14 +3,14 @@
 import { useEffect, useState, useRef } from "react";
 import PlayerTab from "./components/PlayerTab";
 import { 
-  CharacterConfig, CharacterId, 
+  CharacterId, 
   createPlayingOrder, GlobalData, 
-  MusicInfo, MusicSelectionMap, 
+  MusicSelectionMap, 
   MusicUniqueId, Playback, PlaybackSetting, 
   PlaybackState 
 } from "./types/Configs";
 import { Box, Button, CssBaseline, Divider, Paper, Stack } from "@mui/material";
-import { ThemeProvider, createTheme } from "@mui/material/styles";
+import { ThemeProvider } from "@mui/material/styles";
 import { NoFontFamily, theme } from "./components/Theme";
 import CustomTabs from "./components/CustomTabs";
 import ListTab from "./components/ListTab";
@@ -91,17 +91,6 @@ export default function Home() {
     }
     const sourceUrl = globalData.sources.get(musicId);
     return sourceUrl || null;
-  }
-
-  const getMusicInfo = (character: CharacterId): MusicInfo | null => {
-    let musicName = getMusicId(character);
-    if (musicName === null) {
-      return null;
-    }
-    return {
-      ...getMusicInfo(musicName),
-      characterId: character
-    } as MusicInfo;
   }
 
   const setRandomPlaybackPosition = () => {
@@ -397,7 +386,7 @@ export default function Home() {
 
   const handleNextMusic = () => {
     // find next whose (1) selection is not -1 (2) not temporarily disabled
-    let currentIndex = playingOrder.indexOf(currentCharacterId);
+    const currentIndex = playingOrder.indexOf(currentCharacterId);
     const totalCharacters = playingOrder.length;
     for (let offset = 1; offset <= totalCharacters; offset++) {
       const nextIndex = (currentIndex + offset) % totalCharacters;
@@ -413,7 +402,7 @@ export default function Home() {
 
   const handlePreviousMusic = () => {
     // find previous whose (1) selection is not -1 (2) not temporarily disabled
-    let currentIndex = playingOrder.indexOf(currentCharacterId);
+    const currentIndex = playingOrder.indexOf(currentCharacterId);
     const totalCharacters = playingOrder.length;
     for (let offset = 1; offset <= totalCharacters; offset++) {
       const prevIndex = (currentIndex - offset + totalCharacters) % totalCharacters;
@@ -601,7 +590,7 @@ export default function Home() {
             )}
           </Stack>
           <CustomTabs activeTab={activeTab} onChange={setActiveTab} innerTabs={[
-            <TabContainer>
+            <TabContainer key="player-tab">
               <PlayerTab
                 data={globalData}
                 playingOrder={playingOrder}
@@ -624,7 +613,7 @@ export default function Home() {
                 onPause={handlePause}
               ></PlayerTab>
             </TabContainer>,
-            <TabContainer>
+            <TabContainer key="list-tab">
               <ListTab
                 data={globalData}
                 musicSelection={musicSelection}
@@ -644,7 +633,7 @@ export default function Home() {
                 onPause={handlePause}
               ></ListTab>
             </TabContainer>,
-            <TabContainer>
+            <TabContainer key="config-tab">
               <ConfigTab
                 data={globalData}
                 musicSelection={musicSelection}
@@ -656,7 +645,7 @@ export default function Home() {
                 setCurrentCharacterId={setCurrentCharacterId}
               ></ConfigTab>
             </TabContainer>,
-            <TabContainer>
+            <TabContainer key="game-tab">
               <GameTab
                 data={globalData}
                 musicSelection={musicSelection}

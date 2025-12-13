@@ -44,10 +44,15 @@ class GlobalData {
     this.cardCollection = "dairi-sd";
   }
 
-  applyFetchedCharacters(jsonData: any) {
-    const characterData = jsonData; // this is a map
+  applyFetchedCharacters(jsonData: unknown) {
+    const characterData = jsonData as Record<string, unknown>; // this is a map
     for (const charId in characterData) {
-      const charConfig = characterData[charId];
+      const charConfig = characterData[charId] as {
+        card: string | Array<string>;
+        music: string | Array<string>;
+        tags?: Array<string>;
+        searchNames?: Array<string>;
+      };
       let card = charConfig.card;
       if (typeof card === "string") {
         card = [card];
@@ -66,19 +71,24 @@ class GlobalData {
     }
   };
 
-  applyFetchedSources(jsonData: any) {
-    const sourceData = jsonData;
+  applyFetchedSources(jsonData: unknown) {
+    const sourceData = jsonData as Record<string, string>;
     for (const musicId in sourceData) {
       const sourceUrl = sourceData[musicId];
       this.sources.set(musicId, sourceUrl);
     }
   };
 
-  applyFetchedPresets(jsonData: any) {
-    const presetsData = jsonData;
+  applyFetchedPresets(jsonData: unknown) {
+    const presetsData = jsonData as Record<string, Record<string, number>>;
     for (const presetName in presetsData) {
-      const selectionMap = presetsData[presetName];
-      this.presets.set(presetName, selectionMap);
+      const selectionMap = presetsData[presetName] as Record<string, number>;
+      const musicSelectionMap: MusicSelectionMap = new Map();
+      for (const charId in selectionMap) {
+        const musicIndex = selectionMap[charId];
+        musicSelectionMap.set(charId, musicIndex);
+      }
+      this.presets.set(presetName, musicSelectionMap);
     }
   };
 
@@ -122,12 +132,12 @@ function getMusicInfo(musicName: string): { title: string; album: string } {
   // get last "/" and last "."
   // and take the between as musicName
   if (musicName !== undefined) {
-    let lastSlash = musicName.lastIndexOf('/');
-    let lastDot = musicName.lastIndexOf('.');
+    const lastSlash = musicName.lastIndexOf('/');
+    const lastDot = musicName.lastIndexOf('.');
     musicName = musicName.substring(lastSlash + 1, lastDot);
   }
   // remove author
-  let authors = [
+  const authors = [
     "黄昏フロンティア・上海アリス幻樂団",
     "上海アリス幻樂団",
     "ZUN",
@@ -135,7 +145,7 @@ function getMusicInfo(musicName: string): { title: string; album: string } {
     "黄昏フロンティア"
   ]
   for (let i = 0; i < authors.length; i++) {
-    let author = authors[i];
+    const author = authors[i];
     if (musicName.startsWith(author + " - ")) {
       musicName = musicName.substring(author.length + 3);
     }
@@ -175,7 +185,7 @@ function createPlayingOrder(
   randomize: boolean
 ): Array<CharacterId> {
   const characterIds = Array.from(globalData.characterConfigs.keys());
-  let filteredIds = characterIds.filter((charId) => {
+  const filteredIds = characterIds.filter((charId) => {
     return musicSelection.get(charId) !== -1 && !temporaryDisabled.get(charId);
   });
 

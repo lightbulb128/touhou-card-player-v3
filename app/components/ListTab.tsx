@@ -1,7 +1,7 @@
 import { Box, Stack, Typography } from "@mui/material";
 import { 
   getMusicInfoFromCharacterId,
-  GlobalData, MusicSelectionMap, Playback, PlaybackState, CharacterId
+  GlobalData, MusicSelectionMap, Playback, PlaybackState
 } from "../types/Configs";
 import {theme} from "./Theme";
 import PlayerControl from "./PlayerControl";

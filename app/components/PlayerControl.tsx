@@ -50,8 +50,8 @@ function formatTime(seconds: number): string {
 
 export default function PlayerControl({
   showSlider,
-  data, currentCharacterId, playback, setPlayback,
-  playbackState, setPlaybackState,
+  playback,
+  playbackState,
   onNextMusic, onPreviousMusic, onPlay, onPause,
   setPlaybackTime
 }: PlayerControlProps) {

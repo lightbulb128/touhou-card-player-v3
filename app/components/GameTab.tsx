@@ -1,6 +1,6 @@
-import { Box, Button, Grid, Paper, Slider, Stack, TextField, Typography } from "@mui/material";
+import { Box, Button, Paper, Slider, Stack, TextField, Typography } from "@mui/material";
 import { 
-  CharacterId, createPlayingOrder, 
+  CharacterId, 
   getMusicInfoFromCharacterId, GlobalData, 
   MusicSelectionMap, Playback, PlaybackSetting,
   PlaybackState, CardAspectRatio
@@ -17,7 +17,6 @@ import {
   StopRounded, GroupsRounded, SmartToyRounded, PersonOffRounded,
   AddRounded, RemoveRounded, Casino, ClearRounded, ShuffleRounded,
   ClassRounded, StarRounded, FilterList,
-  StartRounded
 } from "@mui/icons-material";
 import { GameButton } from "./GameTabControls";
 import { MonospaceFontFamily, NoFontFamily } from "./Theme";
@@ -105,7 +104,6 @@ export default function GameTab({
   currentCharacterId, 
   characterTemporaryDisabled,
   playingOrder,
-  playback,
   playbackState,
   playbackSetting,
   notifyGameStart,
@@ -121,7 +119,7 @@ export default function GameTab({
 }: GameTabProps) {
 
   // region states
-  const [, setForceRerender] = useState<{}>({}); // used to force re-render
+  const [, setForceRerender] = useState<object>({}); // used to force re-render
   const peerRef = useRef<GamePeer>(new GamePeer());
   const peer = peerRef.current;
   peer.refresh = () => { setForceRerender({}); };
@@ -131,17 +129,19 @@ export default function GameTab({
     characterTemporaryDisabled: characterTemporaryDisabled,
     currentCharacterId: currentCharacterId,
     musicSelection: musicSelection,
+    playbackSetting: playbackSetting,
     setCurrentCharacterId: setCurrentCharacterId,
     setPlayingOrder: setPlayingOrder,
     setCharacterTemporaryDisabled: setCharacterTemporaryDisabled,
     setMusicSelection: setMusicSelection,
-    notifyTurnWinnerDetermined: (winner: Player | null) => {},
-    notifyTurnStarted: (characterId: CharacterId) => {},
+    setPlaybackSetting: setPlaybackSetting,
+    notifyTurnWinnerDetermined: (_unused: Player | null) => {},
+    notifyTurnStarted: (_characterId: CharacterId) => {},
     peer: peer,
     notifyStartGame: () => { return new Array<CharacterId>(); },
     notifyNextTurnCountdown: () => {},
     notifyStopGame: () => {},
-    notifyOuterEventHandler: (event: Event) => {},
+    notifyOuterEventHandler: (_event: Event) => {},
     refresh: (judge: GameJudge) => { setJudge(judge.reconstruct()); },
   });
   const [judge, setJudge] = useState<GameJudge>(new GameJudge(outerRef));
@@ -152,6 +152,7 @@ export default function GameTab({
   const [hoveringCardInfo, setHoveringCardInfo] = useState<CardInfo | null>(null);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [remotePlayerIdInput, setRemotePlayerIdInput] = useState<string>("");
+  const [peerError, setPeerError] = useState<string>("");
   const [timerState, setTimerState] = useState<TimerState>({ 
     type: "zero", referenceTimestamp: 0, time: 0,
     intervalHandle: null
@@ -162,9 +163,6 @@ export default function GameTab({
     mistakeRate: 0.2
   });
   const [cpuOpponentClickTimeout, setCpuOpponentClickTimeout] = useState<NodeJS.Timeout | null>(null);
-  const forceRerender = (judge: GameJudge): void => { 
-    setJudge(judge.reconstruct());
-  };
   const containerRef = useRef<HTMLDivElement>(null);
   const gref = useRef<{
     timerState: TimerState
@@ -201,7 +199,7 @@ export default function GameTab({
   const deckLeft = (canvasWidth - deckWidth) / 2;
   const deckRight = deckLeft + deckWidth;
   const sliderHeight = 28;
-  let middleBarTop = opponentDeckBottom + (hasOpponent ? canvasSpacing : 0);
+  const middleBarTop = opponentDeckBottom + (hasOpponent ? canvasSpacing : 0);
   let middleBarHeight = 0;
   if (judge.state === GameJudgeState.SelectingCards) {
     middleBarHeight = 16 + cardHeight + canvasSpacing + sliderHeight;
@@ -239,7 +237,6 @@ export default function GameTab({
       naturalCardOrder.push(cardInfo);
     })
   });
-  const totalCardCount = cards.size;
 
   judge.deck.forEach((d) => {
     d.forEach((cardInfo) => {
@@ -275,20 +272,9 @@ export default function GameTab({
   }
   
   // region utility funcs
-  const characterIdToCardInfos = (characterId: CharacterId, except: number = -1): Array<CardInfo> => {
-    const characterConfig = data.characterConfigs.get(characterId);
-    const cardInfos: Array<CardInfo> = new Array<CardInfo>();
-    if (characterConfig) {
-      characterConfig.card.forEach((cardId, index) => {
-        if (index === except) return;
-        cardInfos.push(new CardInfo(characterId, index));
-      });
-    }
-    return cardInfos;
-  }
 
   const canvasPositionToDeckPosition = (x: number, y: number, allowedDecks: Array<number> = [0, 1]): DeckPosition | null => {
-    for (let deckIndex of allowedDecks as (0 | 1)[]) {
+    for (const deckIndex of allowedDecks as (0 | 1)[]) {
       if (judge.opponentType === OpponentType.None && deckIndex === 1) {
         continue;
       }
@@ -440,6 +426,13 @@ export default function GameTab({
   // region use effects
 
   useEffect(() => {
+    if (peerError) {
+      console.error("Peer error:", peerError);
+    }
+    peer.ensurePeerNotNull();
+  }, [peerError]);
+
+  useEffect(() => {
     judgeRef.current = judge;
   }, [judge]);
 
@@ -492,14 +485,18 @@ export default function GameTab({
     });
     // for all card in decks, check if in playing order.
     // if not, remove from deck.
-    const deckChanged = false;
+    let deckChanged = false;
     judge.deck.forEach((deck, deckIndex) => {
-      deck.forEach((cardInfo, cardIndex) => {
+      deck.forEach((cardInfo, _cardIndex) => {
         if (cardInfo.characterId !== null && !inPlayingOrder.has(cardInfo.characterId)) {
           judge.removeFromDeck(deckIndex as 0 | 1, cardInfo, true);
+          deckChanged = true;
         }
       });
     });
+    if (deckChanged) {
+      setJudge(judge => judge.reconstruct());
+    }
   }, [playingOrder]);
 
   useEffect(() => {
@@ -508,22 +505,26 @@ export default function GameTab({
     outerRef.current.characterTemporaryDisabled = characterTemporaryDisabled;
     outerRef.current.currentCharacterId = currentCharacterId;
     outerRef.current.musicSelection = musicSelection;
+    outerRef.current.playbackSetting = playbackSetting;
     outerRef.current.peer = peer;
     outerRef.current.setCurrentCharacterId = setCurrentCharacterId;
     outerRef.current.setPlayingOrder = setPlayingOrder;
     outerRef.current.setCharacterTemporaryDisabled = setCharacterTemporaryDisabled;
     outerRef.current.setMusicSelection = setMusicSelection;
+    outerRef.current.setPlaybackSetting = setPlaybackSetting;
   }, [
     data,
     playingOrder, 
     characterTemporaryDisabled, 
     currentCharacterId,
     musicSelection,
+    playbackSetting,
     peer,
     setCurrentCharacterId,
     setPlayingOrder,
     setCharacterTemporaryDisabled,
-    setMusicSelection
+    setMusicSelection,
+    setPlaybackSetting
   ]);
 
   useEffect(() => {
@@ -889,7 +890,7 @@ export default function GameTab({
     }
     if (judge.state === GameJudgeState.TurnWinnerDetermined) {
       // check if mouse is on any deck card on self side.
-      let deckPos = canvasPositionToDeckPosition(mouseX, mouseY, [0]);
+      const deckPos = canvasPositionToDeckPosition(mouseX, mouseY, [0]);
       if (deckPos !== null) {
         const cardInfo = judge.getDeck(deckPos.deckIndex, deckPos.cardIndex);
         if (cardInfo !== null) {
@@ -1183,6 +1184,11 @@ export default function GameTab({
     notifyPauseMusic();
     sendEvent({ type: "pauseMusic" });
   }
+
+  const handlePeerError = (error: string) => {
+    setPeerError(error);
+  }
+  peer.notifyPeerError = handlePeerError;
 
   // const handleAddDeck
 
@@ -1726,7 +1732,6 @@ export default function GameTab({
 
   { // opponent connection 
     // region op conn
-    const textHeight = 16;
     if (judge.opponentType === OpponentType.RemotePlayer && !peer.hasDataConnection()) {
       otherElements.push(
         <Paper
@@ -1761,7 +1766,6 @@ export default function GameTab({
               sx={{
                 userSelect: "none",
                 textAlign: "left",
-                height: `${textHeight}px`,
                 width: "100%",
                 paddingLeft: "4px",
                 fontFamily: NoFontFamily,
@@ -2189,7 +2193,7 @@ export default function GameTab({
             }}
           />
         }
-        {Array.from(cards.values()).map((cardProps, index) => {
+        {Array.from(cards.values()).map((cardProps, _index) => {
           const elementKey = `${cardProps.cardInfo.characterId}-${cardProps.cardInfo.cardIndex}`;
           return <CharacterCard
             key={elementKey}
