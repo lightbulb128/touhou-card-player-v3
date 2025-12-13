@@ -260,6 +260,9 @@ class GamePeer {
   ensurePeerNotNull() {
     if (this.peer === null) {
       this.peer = new Peer();
+      this.peer.on("error", (err) => {
+        console.error("[GamePeer] Peer error:", err);
+      });
       this.peer.on("open", (id: string) => {
         this.refresh();
       });
@@ -322,7 +325,7 @@ type OuterRefObject = {
   notifyTurnWinnerDetermined: (winner: Player | null) => void;
   notifyTurnStarted: (characterId: CharacterId) => void;
   notifyStartGame: (order: Array<CharacterId> | null) => Array<CharacterId>; // return the new playing order
-  notifyNextTurn: () => void;
+  notifyNextTurnCountdown: () => void;
   notifyStopGame: () => void;
   notifyOuterEventHandler: (event: Event) => void;
   refresh: (judge: GameJudge) => void;
@@ -658,7 +661,7 @@ class GameJudge {
         type: "confirmStart",
       });
     }
-    if (this.confirmations.start.all(this.hasOpponent())) {
+    if (this.confirmations.start.all(this.hasRemotePlayer())) {
       this._clientStartGame();
       return {judgeChanged: true, started: true};
     }
@@ -748,6 +751,7 @@ class GameJudge {
       }
     }
     this.givesLeft = net;
+    console.log("givesleft = ", this.givesLeft);
     return true;
   }
 
@@ -881,19 +885,21 @@ class GameJudge {
       return;
     }
     this.countdownNextTurn();
-    this.g().notifyNextTurn();
+    this.g().notifyNextTurnCountdown();
     this.g().refresh(this);
   }
 
   _clientNextTurn(): void {
     this.confirmations.next = new GameConfirmation();
     if (this.isGeneralServer()) { 
-      // send
-      const syncData = this.buildSyncData();
-      this.g().peer.sendEvent({
-        type: "syncNextTurn",
-        data: syncData,
-      });
+      if (this.hasRemotePlayer()) {
+        // send
+        const syncData = this.buildSyncData();
+        this.g().peer.sendEvent({
+          type: "syncNextTurn",
+          data: syncData,
+        });
+      }
       this._serverNextTurn(); 
       return; 
     }
@@ -901,7 +907,7 @@ class GameJudge {
   }
 
   giveCardsRandomly(send: boolean): void {
-    if (this.givesLeft > 0) {
+    if (this.givesLeft != 0) {
       // process gives arbitrarily for CPU
       let givesLeft = this.givesLeft;
       let giver: Player = givesLeft > 0 ? Alice : Bob;
@@ -982,7 +988,7 @@ class GameJudge {
         type: "confirmNext",
       });
     }
-    if (this.confirmations.next.all(this.hasOpponent())) {
+    if (this.confirmations.next.all(this.hasRemotePlayer())) {
       this._clientNextTurn();
       return {judgeChanged: true, nextTurn: true};
     }
@@ -1046,6 +1052,50 @@ class GameJudge {
     for (let i = 0; i < this.deckRows * this.deckColumns; i++) {
       this.deck[Alice].push(new CardInfo(null, 0));
       this.deck[Bob].push(new CardInfo(null, 0));
+    }
+  }
+
+  simulateCPUOpponentPick(mistake: boolean): void {
+    if (this.opponentType !== OpponentType.CPU) {
+      return;
+    }
+    if (this.state !== GameJudgeState.TurnStart) {
+      return;
+    }
+    const currentCharacterId = this.currentCharacterId();
+    if (!mistake) {
+      // pick the correct card from any deck
+      for (let player of [Alice, Bob]) {
+        for (let cardInfo of this.deck[player]) {
+          if (cardInfo.characterId === currentCharacterId) {
+            this.notifyPickEvent(new PickEvent(
+              Date.now(),
+              Bob,
+              cardInfo,
+            ), true);
+            return;
+          }
+        }
+      }
+    } else {
+      // pick a wrong card from any deck
+      const selectableCardInfos: Array<CardInfo> = [];
+      for (let player of [Alice, Bob]) {
+        for (let cardInfo of this.deck[player]) {
+          if (cardInfo.characterId !== null && cardInfo.characterId !== currentCharacterId) {
+            selectableCardInfos.push(cardInfo);
+          }
+        }
+      }
+      if (selectableCardInfos.length > 0) {
+        const randomIndex = Math.floor(Math.random() * selectableCardInfos.length);
+        const cardInfo = selectableCardInfos[randomIndex];
+        this.notifyPickEvent(new PickEvent(
+          Date.now(),
+          Bob,
+          cardInfo,
+        ), true);
+      }
     }
   }
 
@@ -1156,14 +1206,14 @@ class GameJudge {
       }
       case "confirmStart": {
         this.confirmations.start.ok[Bob] = true;
-        if (this.confirmations.start.all(this.hasOpponent())) {
+        if (this.confirmations.start.all(this.hasRemotePlayer())) {
           this._clientStartGame();
         }
         break;
       }
       case "confirmNext": {
         this.confirmations.next.ok[Bob] = true;
-        if (this.confirmations.next.all(this.hasOpponent())) {
+        if (this.confirmations.next.all(this.hasRemotePlayer())) {
           this.confirmations.next = new GameConfirmation();
           this._clientNextTurn();
         }
