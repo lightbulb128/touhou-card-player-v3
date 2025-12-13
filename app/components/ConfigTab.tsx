@@ -1,4 +1,4 @@
-import { Box, Button, Collapse, Divider, Grid, IconButton, Paper, Stack, Typography } from "@mui/material";
+import { Box, Button, Collapse, Divider, FormControl, Grid, IconButton, InputLabel, MenuItem, Paper, Select, Stack, TextField, Typography } from "@mui/material";
 import { AddRounded, RemoveRounded, Task } from "@mui/icons-material";
 import { CharacterId, getMusicInfo, GlobalData, MusicSelectionMap } from "../types/Configs";
 import { Dispatch, useState } from "react";
@@ -8,7 +8,8 @@ import { PagePRNG } from "../types/PagePrng";
 import { 
   CheckBoxOutlineBlank as NoneIcon, 
   IndeterminateCheckBox as PartialIcon, 
-  CheckBox as FullIcon 
+  CheckBox as FullIcon,
+  Search
 } from "@mui/icons-material";
 
 interface ConfigDrawerProps {
@@ -86,6 +87,7 @@ export interface ConfigTabProps {
 export default function ConfigTab(props: ConfigTabProps) {
   const [musicSourceKey, setMusicSourceKey] = useState(DefaultMusicSource.key);
   const [focusedPreset, setFocusedPreset] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState<string>("");
   const prng = new PagePRNG();
   const cardExampleSources: string[] = [];
   const sourcePool = new Array<string>();
@@ -162,6 +164,8 @@ export default function ConfigTab(props: ConfigTabProps) {
     }
   }
 
+  let searched = false;
+
   return (
     <Box
       sx={{width: "100%", display: "flex", justifyContent: "center"}}
@@ -199,6 +203,9 @@ export default function ConfigTab(props: ConfigTabProps) {
                             data.cardCollection = key;
                             return data.reconstruct();
                           });
+                        }}
+                        sx={{
+                          height: "2em"
                         }}
                       >
                         {props.data.cardCollection === key ? "Selected" : "Select"}
@@ -259,6 +266,9 @@ export default function ConfigTab(props: ConfigTabProps) {
                             });
                           });
                         }}
+                        sx={{
+                          height: "2em"
+                        }}
                       >
                         {musicSourceKey === key ? "Selected" : "Select"}
                       </Button>
@@ -281,16 +291,13 @@ export default function ConfigTab(props: ConfigTabProps) {
             {Array.from(presets).map(([name, selectionMap], index) => {
               let fullyApplied = true;
               let partiallyApplied = false;
-              const checks = new Map<CharacterId, boolean>();
               for (const [charId, musicId] of Array.from(selectionMap)) {
-                checks.set(charId, props.musicSelection.get(charId) === musicId);
                 if (props.musicSelection.get(charId) !== musicId) {
                   fullyApplied = false;
                 } else {
                   partiallyApplied = true;
                 }
               }
-              console.log({name, fullyApplied, partiallyApplied, checks});
               const icon = fullyApplied ? <FullIcon fontSize="small"/> : (partiallyApplied ? <PartialIcon fontSize="small"/> : <NoneIcon fontSize="small"/>);
               const setFocused = () => {
                 if (focusedPreset === name) {
@@ -355,6 +362,69 @@ export default function ConfigTab(props: ConfigTabProps) {
                 </Stack>
               );
             })}
+          </Stack>
+        </ConfigDrawer>
+        <ConfigDrawer title="Music Selection Single">
+          <Stack direction="column" spacing={1}
+            sx={{width: "100%"}}
+          >
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Search fontSize="small" />
+              <TextField fullWidth variant="outlined" size="small" label="Search Character"
+                value={searchText}
+                onChange={(e) => {
+                  setSearchText(e.target.value);
+                }}
+              />
+            </Stack>
+            <Divider />
+            {Array.from(props.data.characterConfigs).map(([charId, config]) => {
+              if (searchText !== "") {
+                if (!charId.toLowerCase().includes(searchText.toLowerCase())) {
+                  return null;
+                }
+              }
+              searched = true;
+              const selectedMusicId = props.musicSelection.get(charId) ?? 0;
+              return (
+                <Stack direction="row" spacing={1} key={charId} alignItems="center" justifyContent="space-between">
+                  <Typography variant="body1" width="30%" noWrap textAlign="right">
+                    {charId}
+                  </Typography>
+                  <FormControl size="small" sx={{width: "70%"}}>
+                    <Select
+                      size="small"
+                      value={selectedMusicId}
+                      onChange={(e) => {
+                        const newMusicId = e.target.value as number;
+                        const change = new Map<CharacterId, number>();
+                        change.set(charId, newMusicId);
+                        applyMusicSelectionPreset(change);
+                      }}
+                    >
+                      <MenuItem value={-1}>Disable</MenuItem>
+                      {config.musics.map((musicNameId, index) => {
+                        const musicInfo = getMusicInfo(musicNameId);
+                        let displayTitle = musicNameId;
+                        if (musicInfo) {
+                          displayTitle = musicInfo.title;
+                        }
+                        return (
+                          <MenuItem value={index} key={musicNameId}>
+                            {displayTitle} ({musicInfo.album})
+                          </MenuItem>
+                        );
+                      })}
+                    </Select>
+                  </FormControl>
+                </Stack>
+              );
+            })}
+            {!searched && (
+              <Typography variant="body2" color="textSecondary">
+                No character matched the search.
+              </Typography>
+            )}
           </Stack>
         </ConfigDrawer>
       </Stack>
