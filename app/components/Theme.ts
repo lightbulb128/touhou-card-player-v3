@@ -24,6 +24,7 @@ declare module '@mui/material/styles' {
       "mainTabBackground": string;
       "listBackground1": string;
       "listBackground2": string;
+      "alice": string;
     }
   }
   interface ThemeOptions {
@@ -31,6 +32,7 @@ declare module '@mui/material/styles' {
       "mainTabBackground"?: string;
       "listBackground1"?: string;
       "listBackground2"?: string;
+      "alice"?: string;
     }
   }
 }
@@ -43,13 +45,14 @@ export default function CreateTheme() {
     background: "#141414ff",
     text: "#ffffffff",
     muted: "#babcc1ff",
-    divider: "#ccccccff",
+    divider: "#7b7979ff",
   } as const;
   return createTheme({
     custom: {
       mainTabBackground: "#242222ff",
       listBackground1: "#161616ff",
       listBackground2: "#302E2E",
+      alice: "#ffff83ff",
     },
     palette: {
       mode: "dark",
@@ -64,6 +67,7 @@ export default function CreateTheme() {
         secondary: themeColors.muted,
       },
       divider: themeColors.divider,
+      success: { main: "#ffff83ff",}
     },
     // shape: { borderRadius: 14 },
     typography: {

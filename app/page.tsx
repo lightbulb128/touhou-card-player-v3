@@ -9,7 +9,7 @@ import {
   MusicUniqueId, Playback, PlaybackSetting, 
   PlaybackState 
 } from "./types/Configs";
-import { Box, Button, CssBaseline, Paper, Stack } from "@mui/material";
+import { Box, Button, CssBaseline, Divider, Paper, Stack } from "@mui/material";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { NoFontFamily, theme } from "./components/Theme";
 import CustomTabs from "./components/CustomTabs";
@@ -18,6 +18,7 @@ import GameTab from "./components/GameTab";
 import ConfigTab from "./components/ConfigTab";
 import { DefaultMusicSource } from "./types/Consts";
 import { GetLocalizedString, Localization, setLocale } from "./types/Localization";
+import { PagePRNG } from "./types/PagePrng";
 
 function TabContainer({
   children
@@ -59,7 +60,9 @@ export default function Home() {
   const [playbackState, setPlaybackState] = useState<PlaybackState>(PlaybackState.Stopped);
   const [outOfGameUseCountdown, setOutOfGameUseCountdown] = useState<boolean>(false);
   const [inGame, setInGame] = useState<boolean>(false);
+  const [windowWidth, setWindowWidth] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1200);
 
+  const isOnSmallerScreen = windowWidth < 600;
 
   // region utility funcs
   const getMusicId = (character: CharacterId): MusicUniqueId | null => {
@@ -179,6 +182,16 @@ export default function Home() {
       }
     }
 
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    }
   }, []);
 
   // update audio source when currentCharacterId
@@ -366,18 +379,31 @@ export default function Home() {
   }
 
   // region render
-  const tabButton = (id: number, name: string, onClick?: () => void, disabled?: boolean) => {
+  const tabButton = (
+    id: number, name: string, 
+    onClick?: () => void, 
+    disabled?: boolean,
+    color?: "primary" | "secondary" | "success" | "error" | "info" | "warning",
+    overrideOnClick?: () => void,
+    contained?: boolean,
+    underlinedText?: boolean,
+  ) => {
     return (
       <Button
         key={name}
-        variant={activeTab === id ? "contained" : "outlined"}
-        onClick={() => {
+        variant={contained !== undefined ? (contained ? "contained" : "text") : (activeTab === id ? "contained" : "text")}
+        onClick={overrideOnClick ? overrideOnClick : () => {
           setActiveTab(id);
           if (onClick) onClick();
         }}
         disabled={disabled}
+        color={color || "primary"}
+        size="small"
         sx={{
           fontFamily: NoFontFamily,
+          padding: 0.5,
+          minWidth: (color !== "success" || name === "Alice!") ? "4em" : undefined,
+          textDecoration: underlinedText ? "underline" : "none",
         }}
       >
         {name}
@@ -422,20 +448,62 @@ export default function Home() {
           onEnded={handleCountdownEnded}
         ></audio>
       </div>
-      <div><main><Box sx={{ width: "100%" }}>
-        <Stack direction="column" spacing={2} sx={{
-          width: "100%", alignItems: "center", paddingTop: 2
+      <div><main><Box>
+        <Stack direction="column" spacing={1} sx={{
+          width: "100%", alignItems: "center", paddingTop: 2,
         }}>
-          <Stack direction="row" spacing={2}>
+          <Stack direction="row" spacing={0.5}>
             {tabButton(0, GetLocalizedString(Localization.TabNamePlayer), reloadOutOfGameCountdown, inGame)}
+            <Divider orientation="vertical" flexItem />
             {tabButton(1, GetLocalizedString(Localization.TabNameList), reloadOutOfGameCountdown, inGame)}
+            <Divider orientation="vertical" flexItem />
+            {tabButton(0, 
+              !isOnSmallerScreen ? [
+                "Alice is the best!",
+                "We need more Alice!",
+                "Alice for president!",
+                "Where is Alice?",
+                "Alice fumofumo~",
+              ][PagePRNG.hash("Alice") % 5] : "Alice!",
+              undefined, 
+              inGame, 
+              "success",
+              () => {
+                const targetKey = "アリス・マーガトロイド";
+                const inPlayingOrder = playingOrder.indexOf(targetKey);
+                if (inPlayingOrder !== -1) {
+                  setCurrentCharacterId(targetKey);
+                  if (characterTemporaryDisabled.get(targetKey)) {
+                    setCharacterTemporaryDisabled((original) => {
+                      const newMap = new Map(original);
+                      newMap.set(targetKey, false);
+                      return newMap;
+                    });
+                  }
+                }
+              }, false,
+            )}
+            <Divider orientation="vertical" flexItem />
             {tabButton(2, GetLocalizedString(Localization.TabNameConfigs), reloadOutOfGameCountdown, inGame)}
-            {tabButton(3, GetLocalizedString(Localization.TabNameAbout), () => {
+            {!isOnSmallerScreen && <Divider orientation="vertical" flexItem />}
+            {!isOnSmallerScreen && tabButton(3, GetLocalizedString(Localization.TabNameAbout), () => {
               setOutOfGameUseCountdown(playbackSetting.countdown);
               setPlaybackSetting((original) => {
                 return { ...original, countdown: false };
               });
             })}
+            <Divider orientation="vertical" flexItem />
+            {tabButton(0,
+              GetLocalizedString(Localization.TabNameSourceCode),
+              undefined,
+              false,
+              "primary",
+              () => {
+                window.open("https://github.com/lightbulb128/touhou-card-player-v3", "_blank");
+              },
+              false,
+              true
+            )}
           </Stack>
           <CustomTabs activeTab={activeTab} onChange={setActiveTab} innerTabs={[
             <TabContainer>

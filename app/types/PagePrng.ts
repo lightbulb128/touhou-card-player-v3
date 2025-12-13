@@ -14,6 +14,14 @@ class PagePRNG {
     this.state = (this.state * 48271) % 2147483647;
     return this.state;
   }
+
+  static hash(str: string): number {
+    let hash = this.seed;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash * 31 + str.charCodeAt(i)) % 2147483647;
+    }
+    return hash;
+  }
 }
 
 export { PagePRNG };

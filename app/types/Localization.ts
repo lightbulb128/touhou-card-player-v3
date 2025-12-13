@@ -24,6 +24,7 @@ const Localization = {
   TabNameList: u("List", "列表"),
   TabNameConfigs: u("Config", "设置"),
   TabNameAbout: u("Match", "游戏"),
+  TabNameSourceCode: u("Source", "源码"),
 
   PlayerTabUpcoming: u("Upcoming (click to skip)", "接下来（点击以跳过）"),
   PlayerTabShuffle: u("Shuffle", "重新抽选"),

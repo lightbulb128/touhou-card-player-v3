@@ -48,7 +48,8 @@ export default function PlayerTab({
 
   const [hoveringCharacterId, setHoveringCharacterId] = useState<CharacterId | null>(null);
   const [playbackDurationString, setPlaybackDurationString] = useState<string>("0");
-  
+  const [windowWidth, setWindowWidth] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1200);
+
   useEffect(() => {
     setPlaybackDurationString(playbackSetting.playbackDuration.toString());
   }, [playbackSetting]);
@@ -59,12 +60,22 @@ export default function PlayerTab({
   }
   let placeholderCardSource = data.getAnyCardSource();
 
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
   const upcomingCards = [];
   {
-    const singleCardWp = 10; // wp = width percentage
-    const cardInGroupOverlapWp = 8;
-    const groupOverlapWp = 2;
-    const playedOffsetWp = 20;
+    const singleCardWp = Math.min(windowWidth * 0.2, 150); // wp = width percentage
+    const cardInGroupOverlapWp = singleCardWp * 0.8;
+    const groupOverlapWp = singleCardWp * 0.2;
+    const playedOffsetWp = singleCardWp * 2;
     let baseOffset = 0;
     // add a placeholder card first
     upcomingCards.push(<CharacterCard
@@ -73,7 +84,7 @@ export default function PlayerTab({
       imageSource={placeholderCardSource}
       backgroundState={CardBackgroundState.Placeholder}
       raised={false}
-      width={`${singleCardWp}%`}
+      width={`${singleCardWp}px`}
       sx={{
         visibility: "hidden",
       }}
@@ -114,10 +125,10 @@ export default function PlayerTab({
           cardCollection={data.cardCollection}
           imageSource={cardSource}
           backgroundState={background}
-          width={`${singleCardWp}%`}
+          width={`${singleCardWp}px`}
           sx={{
             position: "absolute",
-            left: `${accumulate}%`,
+            left: `${accumulate}px`,
             transition: "left 0.5s ease-in-out, transform 0.3s ease, background-color 0.3s ease, filter 0.3s ease",
             zIndex: totalCards - counter,
           }}

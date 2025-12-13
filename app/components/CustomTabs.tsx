@@ -12,9 +12,10 @@ export default function CustomTabs({
   return (
     <Box
       sx={{
-        overflow: "hidden",
         width: "100%",
         display: "flex",
+        position: "relative",
+        overflowX: "clip",
       }}
     >
       {innerTabs.map((tab, index) => (
