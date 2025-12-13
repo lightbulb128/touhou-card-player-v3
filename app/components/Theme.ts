@@ -16,20 +16,43 @@ const whitney = localFont({
 
 const MonospaceFontFamily = `${inconsolata.style.fontFamily}, Consolas, 'Courier New', monospace`;
 const DefaultFontFamily = `${yugothicb.style.fontFamily}, ${whitney.style.fontFamily}, sans-serif`;
+const NoFontFamily = `${whitney.style.fontFamily}, sans-serif`;
+
+declare module '@mui/material/styles' {
+  interface Theme {
+    custom: {
+      "mainTabBackground": string;
+      "listBackground1": string;
+      "listBackground2": string;
+    }
+  }
+  interface ThemeOptions {
+    custom?: {
+      "mainTabBackground"?: string;
+      "listBackground1"?: string;
+      "listBackground2"?: string;
+    }
+  }
+}
 
 export default function CreateTheme() {
   const themeColors = {
-    primary: "#0049c7ff",
-    secondary: "#9c8200ff",
-    surface: "#ffffff",
-    background: "#f6f7fb",
-    text: "#0f172a",
-    muted: "#475569",
-    divider: "#e2e8f0",
+    primary: "#5090ffff",
+    secondary: "#9c83ffff",
+    surface: "#262626ff",
+    background: "#141414ff",
+    text: "#ffffffff",
+    muted: "#babcc1ff",
+    divider: "#ccccccff",
   } as const;
   return createTheme({
+    custom: {
+      mainTabBackground: "#242222ff",
+      listBackground1: "#161616ff",
+      listBackground2: "#302E2E",
+    },
     palette: {
-      mode: "light",
+      mode: "dark",
       primary: { main: themeColors.primary },
       secondary: { main: themeColors.secondary },
       background: {
@@ -49,4 +72,8 @@ export default function CreateTheme() {
     }
   });
 }
+
+const theme = CreateTheme();
+export { theme };
+export { MonospaceFontFamily, DefaultFontFamily, NoFontFamily };
 

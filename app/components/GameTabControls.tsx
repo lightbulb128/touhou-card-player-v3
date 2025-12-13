@@ -1,6 +1,7 @@
 import { SxProps, Typography } from "@mui/material";
 import { Box, Stack } from "@mui/system";
 import { IconButton } from "@mui/material";
+import { theme } from "./Theme";
 
 export interface GameButtonProps {
   text?: string;
@@ -65,7 +66,7 @@ export function GameButton({
         sx={{
           cursor: (props.disabled || props.hidden) ? "default" : "pointer",
           border: props.bordered ? (
-            props.disabled ? "1px solid rgba(0,0,0,0.12)" : "1px solid"
+            props.disabled ? `1px solid ${theme.palette.action.disabled}` : "1px solid"
           ) : "none",
           backgroundColor: props.contained ? (
             props.disabled ? "action.disabled" : "primary.main"

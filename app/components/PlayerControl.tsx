@@ -1,11 +1,12 @@
 import { CharacterId, GlobalData, Playback, PlaybackState } from "../types/Configs";
-import { IconButton, Slider, Stack } from "@mui/material";
+import { IconButton, Slider, Stack, Typography } from "@mui/material";
 import {
   SkipNextRounded as RightIcon,
   SkipPreviousRounded as LeftIcon,
   PauseRounded as PauseIcon,
   PlayArrowRounded as PlayIcon,
 } from "@mui/icons-material";
+import { MonospaceFontFamily } from "./Theme";
 
 export interface PlayerControlProps {
   showSlider?: boolean;
@@ -77,7 +78,7 @@ export default function PlayerControl({
   }
   return <Stack direction="column" spacing={1} alignItems="center" width="100%" justifyContent="center">
     <Stack direction="row" spacing={3} alignItems="center" width="100%" justifyContent="center">
-      <div>{formatTime(playback.currentTime)}</div>
+      <Typography fontFamily={MonospaceFontFamily}>{formatTime(playback.currentTime)}</Typography>
       <Slider value={playback.currentTime} 
         min={0} max={playback.duration} 
         sx={{ width: "clamp(0px, 40%, 300px)" }}
@@ -88,7 +89,7 @@ export default function PlayerControl({
           }
         }}
       />
-      <div>{formatTime(playback.duration)}</div>
+      <Typography fontFamily={MonospaceFontFamily}>{formatTime(playback.duration)}</Typography>
     </Stack>
     {buttons}
   </Stack>;

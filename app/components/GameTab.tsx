@@ -20,6 +20,7 @@ import {
   StartRounded
 } from "@mui/icons-material";
 import { GameButton } from "./GameTabControls";
+import { MonospaceFontFamily } from "./Theme";
 
 
 export interface GameTabProps {
@@ -683,7 +684,7 @@ export default function GameTab({
               display: "flex",
             }}
           >
-           <Typography variant="h3" sx={{ userSelect: "none" }}>
+           <Typography variant="h3" sx={{ userSelect: "none" }} fontFamily={MonospaceFontFamily}>
               {d.length}
             </Typography> 
           </Box>
@@ -1505,12 +1506,12 @@ export default function GameTab({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "#ffeeee",
+            backgroundColor: "#000000ff",
             opacity: middleBarShown ? 1.0 : 0.0,
             transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease, opacity 0.3s ease",
           }}
         >
-        <Typography variant="h3">{text}</Typography> 
+        <Typography variant="h3" fontFamily={MonospaceFontFamily}>{text}</Typography> 
       </Box>
       );
       x += timerTextWidth + canvasSpacing;
@@ -1680,11 +1681,11 @@ export default function GameTab({
           key="opponent-connection-paper"
           sx={{
             position: "absolute",
-            left: `${deckLeft}px`,
-            top: `${opponentDeckTop}px`,
-            width: `${deckWidth}px`,
-            height: `${deckHeight}px`,
-            backgroundColor: "#ffeeee",
+            left: `${deckLeft - 5}px`,
+            top: `${opponentDeckTop - 5}px`,
+            width: `${deckWidth + 10}px`,
+            height: `${deckHeight + 5}px`,
+            backgroundColor: "#000000ff",
             zIndex: 1500,
             alignItems: "center",
             justifyContent: "center",

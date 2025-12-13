@@ -11,7 +11,7 @@ import {
 } from "./types/Configs";
 import { Box, Button, CssBaseline, Paper, Stack, Tab, Tabs } from "@mui/material";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
-import CreateTheme from "./components/Theme";
+import { theme } from "./components/Theme";
 import CustomTabs from "./components/CustomTabs";
 import ListTab from "./components/ListTab";
 import GameTab from "./components/GameTab";
@@ -29,7 +29,7 @@ function TabContainer({
     <Paper
       sx={{ 
         padding: 2, width: "100%", overflow: "hidden",
-        backgroundColor: "#eef8ff"
+        backgroundColor: theme.custom.mainTabBackground
       }}
     >
       {children}
@@ -38,8 +38,6 @@ function TabContainer({
 }
 
 export default function Home() {
-
-  const theme = CreateTheme();
 
   // refs
   const audioElementRef = useRef<HTMLAudioElement | null>(null);

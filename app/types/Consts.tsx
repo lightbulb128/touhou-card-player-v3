@@ -37,12 +37,12 @@ const MusicSources: Array<{ key: string; url: string; description: string }> = (
   {
     key: "cloudflare-r2",
     url: "/sources_cloudflare_r2.json",
-    description: "Cloudflare R2 Bucket"
+    description: "Music hosted in a Cloudflare R2 Bucket. Cloudflare R2 Storage allows developers to store large amounts of unstructured data without the costly egress bandwidth fees associated with typical cloud storage services."
   },
   {
     key: "thbwiki",
     url: "/sources_thbwiki.json",
-    description: "THBWiki"
+    description: "Music from THBWiki. Why, sometimes very slow."
   },
 ]);
 

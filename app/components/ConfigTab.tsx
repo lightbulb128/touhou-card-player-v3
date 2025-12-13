@@ -11,6 +11,7 @@ import {
   CheckBox as FullIcon,
   Search
 } from "@mui/icons-material";
+import { MonospaceFontFamily, NoFontFamily } from "./Theme";
 
 interface ConfigDrawerProps {
   title: string;
@@ -191,7 +192,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                   {index !== 0 && <Divider />}
                   <Grid container spacing={1} width="100%">
                     <Grid size={8} sx={{display: "flex", alignItems: "center"}}>
-                      <Typography variant="body1">
+                      <Typography variant="body2">
                         {key}
                       </Typography>
                     </Grid>
@@ -246,7 +247,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                   {index !== 0 && <Divider />}
                   <Grid container spacing={1} width="100%">
                     <Grid size={8} sx={{display: "flex", alignItems: "center"}}>
-                      <Typography variant="body1">
+                      <Typography variant="body2">
                         {key}
                       </Typography>
                     </Grid>
@@ -310,7 +311,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                 <Stack direction="column" width="100%" key={name} spacing={0} onClick={setFocused}>
                   <Grid container width="100%" >
                     <Grid size={8} sx={{display: "flex", alignItems: "center"}}>
-                      <Typography variant="body1" sx={{display: "flex", alignItems: "center", gap: 0.5}}>
+                      <Typography variant="body2" sx={{display: "flex", alignItems: "center", gap: 0.5}} fontFamily={NoFontFamily}>
                         {icon}
                         {name}
                       </Typography>
@@ -370,11 +371,16 @@ export default function ConfigTab(props: ConfigTabProps) {
           >
             <Stack direction="row" spacing={1} alignItems="center">
               <Search fontSize="small" />
-              <TextField fullWidth variant="outlined" size="small" label="Search Character"
+              <TextField fullWidth variant="filled" size="small" label="Search Character"
                 value={searchText}
                 onChange={(e) => {
                   setSearchText(e.target.value);
                 }}
+                slotProps={{ input: { 
+                  style: { 
+                    fontFamily: NoFontFamily 
+                  }
+                }}}
               />
             </Stack>
             <Divider />
@@ -388,7 +394,7 @@ export default function ConfigTab(props: ConfigTabProps) {
               const selectedMusicId = props.musicSelection.get(charId) ?? 0;
               return (
                 <Stack direction="row" spacing={1} key={charId} alignItems="center" justifyContent="space-between">
-                  <Typography variant="body1" width="30%" noWrap textAlign="right">
+                  <Typography variant="body2" width="30%" noWrap textAlign="right">
                     {charId}
                   </Typography>
                   <FormControl size="small" sx={{width: "70%"}}>
@@ -402,7 +408,9 @@ export default function ConfigTab(props: ConfigTabProps) {
                         applyMusicSelectionPreset(change);
                       }}
                     >
-                      <MenuItem value={-1}>Disable</MenuItem>
+                      <MenuItem value={-1}>
+                        <Typography variant="body2">Disable</Typography>
+                      </MenuItem>
                       {config.musics.map((musicNameId, index) => {
                         const musicInfo = getMusicInfo(musicNameId);
                         let displayTitle = musicNameId;
@@ -411,7 +419,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                         }
                         return (
                           <MenuItem value={index} key={musicNameId}>
-                            {displayTitle} ({musicInfo.album})
+                            <Typography variant="body2">{displayTitle} ({musicInfo.album})</Typography>
                           </MenuItem>
                         );
                       })}

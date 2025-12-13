@@ -3,6 +3,7 @@ import {
   getMusicInfoFromCharacterId,
   GlobalData, MusicSelectionMap, Playback, PlaybackState, CharacterId
 } from "../types/Configs";
+import {theme} from "./Theme";
 import PlayerControl from "./PlayerControl";
 
 export interface ListTabProps {
@@ -65,14 +66,14 @@ export default function ListTab(props: ListTabProps) {
           const isDisabled = props.characterTemporaryDisabled.get(charId) ?? false;
           const musicInfo = getMusicInfoFromCharacterId(props.data, props.musicSelection, charId);
           if (!musicInfo) return null;
-          let backgroundColor = index % 2 === 0 ? "#daeafaff" : "#eaf5ffff";
+          let backgroundColor = index % 2 === 0 ? theme.custom.listBackground1 : theme.custom.listBackground2;
           if (isDisabled) {
-            backgroundColor = "#969696ff";
+            backgroundColor = "#737373ff";
           }
           if (charId === props.currentCharacterId) {
             backgroundColor = "#c14848ff";
           }
-          let textcolor = "black";
+          let textcolor = theme.palette.text.primary;
           if (charId === props.currentCharacterId || isDisabled) {
             textcolor = "white";
           }
