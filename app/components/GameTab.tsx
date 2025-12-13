@@ -137,7 +137,7 @@ export default function GameTab({
     notifyTurnStarted: (characterId: CharacterId) => {},
     peer: peer,
     notifyStartGame: () => { return new Array<CharacterId>(); },
-    notifyNextTurn: () => {},
+    notifyNextTurnCountdown: () => {},
     notifyStopGame: () => {},
     notifyOuterEventHandler: (event: Event) => {},
     refresh: (judge: GameJudge) => { setJudge(judge.reconstruct()); },
@@ -156,7 +156,7 @@ export default function GameTab({
   });
   const [cpuOpponentSetting, setCpuOpponentSetting] = useState<CPUOpponentSetting>({
     reactionTimeMean: 6,
-    reactionTimeStdDev: 1,
+    reactionTimeStdDev: 0.5,
     mistakeRate: 0.2
   });
   const [cpuOpponentClickTimeout, setCpuOpponentClickTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -1083,31 +1083,42 @@ export default function GameTab({
     if (cpuOpponentClickTimeout !== null) {
       clearTimeout(cpuOpponentClickTimeout);
     }
+    const shouldMistake = Math.random() < cpuOpponentSetting.mistakeRate;
+    const delayMean = cpuOpponentSetting.reactionTimeMean;
+    const delayStdDev = cpuOpponentSetting.reactionTimeStdDev;
+    // [a, b] uniform distribution
+    // with a = mu + sqrt(12)/2*sigma, b = mu - sqrt(12)/2*sigma
+    const halfRange = Math.sqrt(12) / 2 * delayStdDev;
+    let delay = delayMean + (Math.random() * 2 - 1) * halfRange;
+    if (delay < 0.1) { delay = 0.1; }
     const timeout = setTimeout(() => {
+      console.log("CPU opponent picking card");
       const judge = judgeRef.current;
       if (judge.opponentType === OpponentType.CPU && judge.state === GameJudgeState.TurnStart) {
-        // try click
+        judge.simulateCPUOpponentPick(shouldMistake);
+        setJudge(judge.reconstruct());
       }
-    });
+    }, delay * 1000);
     setCpuOpponentClickTimeout(timeout);
   }
 
-  const handleNextTurn = () => {
+  const handleNextTurnCountdown = () => {
+    console.log("Next turn notified");
     if (judge.opponentType === OpponentType.RemotePlayer) {
       notifyPlayCountdownAudio();
       timerTextStartCountdown();
     }
-    if (judge.opponentType === OpponentType.CPU) {
-      cpuOpponentCountdown();
-    }
   }
-  outerRef.current.notifyNextTurn = handleNextTurn;
+  outerRef.current.notifyNextTurnCountdown = handleNextTurnCountdown;
 
   const handleNextTurnButtonClick = () => {
     if (judge.state === GameJudgeState.TurnWinnerDetermined && judge.givesLeft > 0) {
       judge.giveCardsRandomly(true);
       setJudge(judge.reconstruct());
       return;
+    }
+    if (judge.opponentType === OpponentType.CPU && judge.givesLeft < 0) {
+      judge.giveCardsRandomly(false);
     }
     judge.confirmNext(0);
     setJudge(judge.reconstruct());
@@ -1130,6 +1141,9 @@ export default function GameTab({
 
   const notifyTurnStarted = () => {
     timerTextStartRunning();
+    if (judge.opponentType === OpponentType.CPU) {
+      cpuOpponentCountdown();
+    }
   }
   outerRef.current.notifyTurnStarted = notifyTurnStarted;
 
@@ -1577,7 +1591,7 @@ export default function GameTab({
         }
       }
       if (judge.state === GameJudgeState.TurnWinnerDetermined && judge.givesLeft > 0) {
-        text = `Give ${judge.givesLeft} card${judge.givesLeft > 1 ? "s" : ""} randomly`;
+        text = `Give ${judge.givesLeft} card${judge.givesLeft > 1 ? "s" : ""}`;
       }
       if (judge.isGameFinished()) {
         clickable = false;
@@ -1613,6 +1627,8 @@ export default function GameTab({
         } else if (judge.givesLeft < 0 && judge.hasRemotePlayer()) {
           text = `You need to receive ${-judge.givesLeft} card${-judge.givesLeft > 1 ? "s" : ""} from opponent. Please wait for opponent to give you cards.`;
           clickable = false;
+        } else if (judge.givesLeft < 0 && !judge.hasRemotePlayer()) {
+          text = `You will receive ${-judge.givesLeft} card${-judge.givesLeft > 1 ? "s" : ""} from opponent when moving to next turn.`;
         }
         if (judge.isGameFinished()) {
           text = "";
