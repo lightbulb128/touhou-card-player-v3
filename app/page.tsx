@@ -46,6 +46,7 @@ export default function Home() {
   const countdownAudioElementRef = useRef<HTMLAudioElement | null>(null);
 
   // states
+  const [globalDataLoadedFlag, setGlobalDataLoadedFlag] = useState<boolean>(false);
   const [globalData, setGlobalData] = useState<GlobalData>(new GlobalData());
   const [activeTab, setActiveTab] = useState<number>(0);
   const [playback, setPlayback] = useState<Playback>(new Playback());
@@ -122,7 +123,83 @@ export default function Home() {
     }
   }
 
+  const saveToLocalStorage = () => {
+    if (!globalDataLoadedFlag) { return; }
+    console.log("Saving to local storage...");
+    // save music selection
+    const selectionObj: { [key: string]: number } = {};
+    musicSelection.forEach((value, key) => {
+      selectionObj[key] = value;
+    });
+    localStorage.setItem("musicSelection", JSON.stringify(selectionObj));
+    // save playing order
+    localStorage.setItem("playingOrder", JSON.stringify(playingOrder));
+    // save character temporary disabled
+    const disabledObj: { [key: string]: boolean } = {};
+    characterTemporaryDisabled.forEach((value, key) => {
+      disabledObj[key] = value;
+    });
+    localStorage.setItem("characterTemporaryDisabled", JSON.stringify(disabledObj));
+    // save current character id
+    localStorage.setItem("currentCharacterId", currentCharacterId);
+  }
+
+  const loadFromLocalStorage = (globalData: GlobalData): boolean => {
+    console.log("Loading from local storage...");
+    // character set
+    const characterSet = new Set<CharacterId>(globalData.characterConfigs.keys());
+    // load music selection
+    const selectionStr = localStorage.getItem("musicSelection");
+    const newSelection: MusicSelectionMap = new Map();
+    let flag = true;
+    if (selectionStr) {
+      const selectionObj = JSON.parse(selectionStr) as { [key: string]: number };
+      for (const key in selectionObj) {
+        if (characterSet.has(key)) {
+          newSelection.set(key, selectionObj[key]);
+        }
+      }
+      if (newSelection.size === 0) { flag = false; }
+    } else { flag = false; }
+    // load playing order
+    const newOrder: Array<CharacterId> = [];
+    const orderStr = localStorage.getItem("playingOrder");
+    if (orderStr) {
+      const orderArr = JSON.parse(orderStr) as Array<CharacterId>;
+      for (const charId of orderArr) {
+        if (characterSet.has(charId)) {
+          newOrder.push(charId);
+        }
+      }
+      if (newOrder.length === 0) { flag = false; }
+    } else { flag = false; }
+    // load character temporary disabled
+    const disabledStr = localStorage.getItem("characterTemporaryDisabled");
+    const newDisabled: Map<CharacterId, boolean> = new Map();
+    if (disabledStr) {
+      const disabledObj = JSON.parse(disabledStr) as { [key: string]: boolean };
+      for (const key in disabledObj) {
+        if (characterSet.has(key)) {
+          newDisabled.set(key, disabledObj[key]);
+        }
+      }
+    } else { flag = false; }
+    // load current character id
+    const currentCharId = localStorage.getItem("currentCharacterId");
+    if (!currentCharId || !characterSet.has(currentCharId)) {
+      flag = false;
+    }
+    if (flag) {
+      setMusicSelection(newSelection);
+      setPlayingOrder(newOrder);
+      setCharacterTemporaryDisabled(newDisabled);
+      setCurrentCharacterId(currentCharId as CharacterId);
+    } 
+    return flag;
+  }
+
   // region effects
+
   // fetch data
   useEffect(() => {
     const load = async () => {
@@ -144,19 +221,25 @@ export default function Home() {
         return original;
       });
 
+      setGlobalDataLoadedFlag(true);
+
+      const loadedFlags = loadFromLocalStorage(globalData);
+
+      if (!loadedFlags) {
       // set music selection to 0 for all characters
-      const initialSelection: MusicSelectionMap = new Map();
-      for (const charId in characters) {
-        initialSelection.set(charId, 0);
+        const initialSelection: MusicSelectionMap = new Map();
+        for (const charId in characters) {
+          initialSelection.set(charId, 0);
+        }
+        setMusicSelection(initialSelection);
+
+        // create playing order
+        const order = createPlayingOrder(globalData, musicSelection, characterTemporaryDisabled, false);
+        setPlayingOrder(order);
+
+        // set current character to the first one
+        setCurrentCharacterId(order.length > 0 ? order[0] : "");
       }
-      setMusicSelection(initialSelection);
-
-      // create playing order
-      const order = createPlayingOrder(globalData, musicSelection, characterTemporaryDisabled, false);
-      setPlayingOrder(order);
-
-      // set current character to the first one
-      setCurrentCharacterId(order.length > 0 ? order[0] : "");
     };
 
     load().catch((err) => {
@@ -168,6 +251,7 @@ export default function Home() {
     const localeParam = params.get("locale");
     let localeSet = false;
     if (localeParam === "en" || localeParam === "zh") {
+      console.log("Found locale in query params:", localeParam);
       setLocale(localeParam);
       localeSet = true;
     }
@@ -176,8 +260,10 @@ export default function Home() {
       // detect browser locale
       const browserLang = navigator.language || navigator.languages[0] || "en";
       if (browserLang.startsWith("zh")) {
+        console.log("Detected browser locale:", browserLang);
         setLocale("zh");
       } else {
+        console.log("Detected browser locale:", browserLang);
         setLocale("en");
       }
     }
@@ -220,6 +306,11 @@ export default function Home() {
       }
     }
   }, [currentCharacterId]);
+
+  // save data to local storage when changes
+  useEffect(() => {
+    saveToLocalStorage();
+  }, [musicSelection, playingOrder, characterTemporaryDisabled, currentCharacterId]);
 
   // region handlers
 
