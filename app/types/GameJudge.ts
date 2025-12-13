@@ -1,6 +1,6 @@
 import { RefObject } from "react";
 import { CharacterId, GlobalData, MusicSelectionMap, PlaybackSetting } from "./Configs";
-import Peer, { DataConnection } from "peerjs";
+import Peer, { DataConnection, PeerOptions } from "peerjs";
 
 const Alice = 0; // Alice is always the local host
 const Bob = 1; // Bob is always the remote player
@@ -268,7 +268,12 @@ class GamePeer {
 
   ensurePeerNotNull(forceReconstructPeer: boolean = false) {
     if (this.peer === null || forceReconstructPeer) {
-      this.peer = new Peer();
+      this.peer = new Peer({ 
+        'iceServers': [
+          { 'urls': 'stun:stun.servcices.mozilla.com' }
+        ], 
+        'sdpSemantics': 'unified-plan' 
+      } as PeerOptions);
       this.peer.on("error", (err) => {
         console.error("[GamePeer] Peer error:", err);
         this.notifyPeerError(`Peer error: ${err}`);
