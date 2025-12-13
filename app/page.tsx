@@ -210,9 +210,9 @@ export default function Home() {
       };
 
       const [characters, sources, presets] = await Promise.all([
-        fetchJson("/character.json"),
+        fetchJson("character.json"),
         fetchJson(DefaultMusicSource.url),
-        fetchJson("/idpresets.json"),
+        fetchJson("idpresets.json"),
       ]);
 
       setGlobalData((original) => { 
