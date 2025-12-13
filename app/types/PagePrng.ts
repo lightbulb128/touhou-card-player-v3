@@ -15,7 +15,10 @@ class PagePRNG {
     return this.state;
   }
 
-  static hash(str: string): number {
+  static hash(str: string | null | undefined): number {
+    if (str === null || str === undefined) {
+      return 0;
+    }
     let hash = this.seed;
     for (let i = 0; i < str.length; i++) {
       hash = (hash * 31 + str.charCodeAt(i)) % 2147483647;

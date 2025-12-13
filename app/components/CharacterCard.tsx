@@ -1,5 +1,6 @@
 import { Box, Paper, Stack, SxProps } from "@mui/material";
 import { CharacterId, GlobalData, CardAspectRatio } from "../types/Configs";
+import { PagePRNG } from "../types/PagePrng";
 
 const CardCollectionPrefix: Map<string, string> = new Map([
 	["dairi-sd", "https://r2bucket-touhou.hgjertkljw.org/cards/"],
@@ -9,6 +10,18 @@ const CardCollectionPrefix: Map<string, string> = new Map([
 	["thbwiki-sd", "https://r2bucket-touhou.hgjertkljw.org/cards-thwiki/"],
 	["zun", "https://r2bucket-touhou.hgjertkljw.org/cards-zun/"],
 ]);
+
+let staticGlitch: boolean | null = null;
+function glitch(): boolean {
+	if (staticGlitch === null) {
+		// get a "g" from query params
+		if (typeof window === "undefined") { return false; }
+		const params = new URLSearchParams(window.location.search);
+		const g = params.get("g");
+		staticGlitch = (g !== null);
+	}
+	return staticGlitch;
+}
 
 export enum CardBackgroundState {
 	Placeholder,
@@ -33,6 +46,7 @@ export interface CharacterCardProps {
 	width: string;
 	paperElevation?: number;
 	paperVariant?: "elevation" | "outlined";
+	upsideDown?: boolean;
 	[key: string]: any;
 }
 
@@ -41,7 +55,7 @@ export function CharacterCard({
 	imageSource,
 	backgroundState, raised, raiseDirection,
 	onClick, sx, aspectRatio, width,
-	paperElevation, paperVariant,
+	paperElevation, paperVariant, upsideDown,
 	...props
 }: CharacterCardProps) {
 	if (backgroundState === undefined) {
@@ -93,7 +107,25 @@ export function CharacterCard({
 	}
 	const isGrayscale = backgroundState === CardBackgroundState.Disabled || backgroundState === CardBackgroundState.DisabledHover;
 	const borderStyle = isPlaceholder ? "2px dashed gray" : "none";
-	const raiseTransform = raised ? (raiseDirection === "up" ? "translateY(-10%)" : "translateY(10%)") : "translateY(0px)";
+	let transform = "";
+	let rotation = 0;
+	if (upsideDown) {
+		rotation = 180;
+	}
+	if (glitch() && !isPlaceholder) {
+		const r = PagePRNG.hash(cardSource) % 10 - 5;
+		rotation += r;
+	}
+	if (rotation !== 0) {
+		transform += `rotate(${rotation}deg)`;
+	}
+	if (raised) {
+		if (raiseDirection === "up") {
+			transform += " translateY(-10%)";
+		} else {
+			transform += " translateY(10%)";
+		}
+	}
 	const cardSourcePrefix = CardCollectionPrefix.get(cardCollection) || CardCollectionPrefix.get("dairi-sd");
 	return (
 		<Paper elevation={paperElevation} variant={paperVariant}
@@ -102,7 +134,7 @@ export function CharacterCard({
 				backgroundColor: backgroundColor,
 				border: borderStyle,
 				transition: "transform 0.3s ease, background-color 0.3s ease, filter 0.3s ease",
-				transform: raiseTransform,
+				transform: transform,
 				...sx,
 			}}
 			onClick={onClick ? () => onClick() : undefined}

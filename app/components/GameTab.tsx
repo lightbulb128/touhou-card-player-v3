@@ -804,7 +804,10 @@ export default function GameTab({
     }
   }
 
-  const unusedTotalWidth = (canvasWidth - deckWidth) / 2 - canvasSpacing - canvasMargin;
+  let unusedTotalWidth = (canvasWidth - deckWidth) / 2 - canvasSpacing - canvasMargin;
+  if (unusedTotalWidth - cardWidth > 50) {
+    unusedTotalWidth = 50 + cardWidth;
+  }
   let unusedD = 0;
   if (unusedTotalWidth > cardWidth) {
     unusedD = (unusedTotalWidth - cardWidth) / (unusedCards.length - 1);
@@ -2195,13 +2198,13 @@ export default function GameTab({
             imageSource={cardProps.source}
             width={cardProps.width}
             backgroundState={cardProps.backgroundState}
+            upsideDown={cardProps.upsideDown}
             sx={{
               position: "absolute",
               left: cardProps.x,
               top: cardProps.y,
               zIndex: cardProps.zIndex,
-              transition: cardProps.transition ?? getCardTransitionString("0.3s"),
-              transform: cardProps.transform ?? (cardProps.upsideDown ? "rotate(180deg)" : "none"),
+              transition: cardProps.transition ?? getCardTransitionString("0.3s")
             }}
             onMouseEnter={cardProps.onMouseEnter}
             onMouseLeave={cardProps.onMouseLeave}
