@@ -24,6 +24,7 @@ export interface PlayerTabProps {
   characterTemporaryDisabled: Map<CharacterId, boolean>;
   playbackSetting: PlaybackSetting;
   playbackState: PlaybackState;
+  volume: number;
   setPlayback: (playback: Playback) => void;
   setPlaybackState: (state: PlaybackState) => void;
   setCharacterTemporaryDisabled: (map: Map<CharacterId, boolean>) => void;
@@ -31,6 +32,7 @@ export interface PlayerTabProps {
   setCurrentCharacterId: (characterId: CharacterId) => void;
   setPlaybackSetting: (setting: PlaybackSetting) => void;
   setPlaybackTime?: (time: number) => void;
+  setVolume: (volume: number) => void;
   onNextMusic: () => void;
   onPreviousMusic: () => void;
   onPlay(): void;
@@ -44,6 +46,7 @@ export default function PlayerTab({
   characterTemporaryDisabled, setCharacterTemporaryDisabled, setPlayingOrder, setCurrentCharacterId,
   playbackSetting, setPlaybackSetting, setPlaybackTime,
   playbackState, setPlaybackState,
+  volume, setVolume,
 }: PlayerTabProps) {
 
   const [hoveringCharacterId, setHoveringCharacterId] = useState<CharacterId | null>(null);
@@ -236,9 +239,11 @@ export default function PlayerTab({
           currentCharacterId={currentCharacterId}
           playback={playback}
           playbackState={playbackState}
+          volume={volume}
           setPlayback={setPlayback}
           setPlaybackState={setPlaybackState}
           setPlaybackTime={setPlaybackTime}
+          setVolume={setVolume}
           onNextMusic={onNextMusic}
           onPreviousMusic={onPreviousMusic}
           onPlay={onPlay}

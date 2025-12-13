@@ -63,7 +63,7 @@ export default function Home() {
   const [outOfGameUseCountdown, setOutOfGameUseCountdown] = useState<boolean>(false);
   const [inGame, setInGame] = useState<boolean>(false);
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1200);
-
+  const [volume, setVolume] = useState<number>(1.0);
   const isOnSmallerScreen = windowWidth < 600;
 
   // region utility funcs
@@ -259,6 +259,16 @@ export default function Home() {
     }
 
   }, []);
+
+  // set volume
+  useEffect(() => {
+    if (audioElementRef.current) {
+      audioElementRef.current.volume = volume;
+    }
+    if (countdownAudioElementRef.current) {
+      countdownAudioElementRef.current.volume = volume;
+    }
+  }, [volume]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -600,6 +610,7 @@ export default function Home() {
                 playback={playback}
                 playbackSetting={playbackSetting}
                 playbackState={playbackState}
+                volume={volume}
                 setPlaybackState={setPlaybackState}
                 setPlayback={setPlayback}
                 setCharacterTemporaryDisabled={setCharacterTemporaryDisabled}
@@ -607,6 +618,7 @@ export default function Home() {
                 setCurrentCharacterId={setCurrentCharacterId}
                 setPlaybackSetting={setPlaybackSetting}
                 setPlaybackTime={setPlaybackTime}
+                setVolume={setVolume}
                 onPreviousMusic={handlePreviousMusic}
                 onNextMusic={handleNextMusic}
                 onPlay={handlePlay}
@@ -624,9 +636,11 @@ export default function Home() {
                 setCharacterTemporaryDisabled={setCharacterTemporaryDisabled}
                 playback={playback}
                 playbackState={playbackState}
+                volume={volume}
                 setPlayback={setPlayback}
                 setPlaybackState={setPlaybackState}
                 setPlaybackTime={setPlaybackTime}
+                setVolume={setVolume}
                 onNextMusic={handleNextMusic}
                 onPreviousMusic={handlePreviousMusic}
                 onPlay={handlePlay}
@@ -657,6 +671,7 @@ export default function Home() {
                 notifyPlayMusic={handlePlay}
                 playbackState={playbackState}
                 playbackSetting={playbackSetting}
+                volume={volume}
                 notifyGameStart={handleGameStart}
                 notifyGameEnd={handleGameEnd}
                 notifyPlayCountdownAudio={playCountdownAudio}
@@ -665,6 +680,7 @@ export default function Home() {
                 setCharacterTemporaryDisabled={setCharacterTemporaryDisabled}
                 setMusicSelection={setMusicSelection}
                 setPlaybackSetting={setPlaybackSetting}
+                setVolume={setVolume}
               ></GameTab>
             </TabContainer>
           ]}>

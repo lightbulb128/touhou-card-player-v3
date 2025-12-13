@@ -14,11 +14,13 @@ export interface ListTabProps {
   playingOrder: string[];
   playback: Playback;
   playbackState: PlaybackState;
+  volume: number;
   setCurrentCharacterId: (id: string) => void;
   setCharacterTemporaryDisabled: (map: Map<string, boolean>) => void;
   setPlayback: (playback: Playback) => void;
   setPlaybackTime?: (time: number) => void;
   setPlaybackState: (state: PlaybackState) => void;
+  setVolume: (volume: number) => void;
   onNextMusic: () => void;
   onPreviousMusic: () => void;
   onPlay(): void;
@@ -51,9 +53,11 @@ export default function ListTab(props: ListTabProps) {
         currentCharacterId={props.currentCharacterId}
         playback={props.playback}
         playbackState={props.playbackState}
+        volume={props.volume}
         setPlayback={props.setPlayback}
         setPlaybackTime={props.setPlaybackTime}
         setPlaybackState={props.setPlaybackState}
+        setVolume={props.setVolume}
         onNextMusic={props.onNextMusic}
         onPreviousMusic={props.onPreviousMusic}
         onPlay={props.onPlay}

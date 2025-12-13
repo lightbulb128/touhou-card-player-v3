@@ -17,6 +17,7 @@ import {
   StopRounded, GroupsRounded, SmartToyRounded, PersonOffRounded,
   AddRounded, RemoveRounded, Casino, ClearRounded, ShuffleRounded,
   ClassRounded, StarRounded, FilterList,
+  VolumeDownRounded as VolumeDown, VolumeUpRounded as VolumeUp
 } from "@mui/icons-material";
 import { GameButton } from "./GameTabControls";
 import { MonospaceFontFamily, NoFontFamily } from "./Theme";
@@ -32,6 +33,7 @@ export interface GameTabProps {
   playback: Playback,
   playbackState: PlaybackState,
   playbackSetting: PlaybackSetting,
+  volume: number;
   notifyGameStart: (order: Array<CharacterId> | null) => Array<CharacterId>;
   notifyGameEnd: () => void;
   notifyPauseMusic: () => void;
@@ -42,6 +44,7 @@ export interface GameTabProps {
   setCharacterTemporaryDisabled: (map: Map<CharacterId, boolean>) => void;
   setMusicSelection: (map: MusicSelectionMap) => void;
   setPlaybackSetting: (setting: PlaybackSetting) => void;
+  setVolume: (volume: number) => void;
 }
 
 type CardRenderProps = {
@@ -106,6 +109,7 @@ export default function GameTab({
   playingOrder,
   playbackState,
   playbackSetting,
+  volume,
   notifyGameStart,
   notifyGameEnd,
   notifyPauseMusic,
@@ -115,7 +119,8 @@ export default function GameTab({
   setPlayingOrder,
   setCharacterTemporaryDisabled,
   setMusicSelection,
-  setPlaybackSetting
+  setPlaybackSetting,
+  setVolume,
 }: GameTabProps) {
 
   // region states
@@ -1830,6 +1835,59 @@ export default function GameTab({
             </Stack>}
           </Stack>
         </Paper>
+      );
+    }
+  }
+  
+  { // player left
+    const x = deckLeft - canvasMargin;
+    const iconSize = 24;
+    let y = playerDeckTop;
+    {
+      otherElements.push(
+        <VolumeUp fontSize="small"
+          key="volume-up-label"
+          sx={{
+            position: "absolute", left: `${x}px`, top: `${y}px`,
+            transform: "translateX(-100%)",
+            transition: "left 0.3s ease, top 0.3s ease"
+          }}
+        ></VolumeUp>
+      );
+      y += iconSize + canvasSpacing;
+      let sliderHeight = cardHeight - iconSize * 2 - canvasSpacing * 2;
+      if (sliderHeight < 50) { sliderHeight = 50; }
+      otherElements.push(
+        <Slider
+          size="small"
+          key="volume-slider"
+          orientation="vertical"
+          value={volume}
+          onChange={(e, newValue) => {
+            const vol = Array.isArray(newValue) ? newValue[0] : newValue;
+            setVolume(vol);
+          }}
+          min={0} max={1} step={0.10}
+          sx={{
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            height: `${sliderHeight}px`,
+            transform: "translateX(-85%)",
+            transition: "left 0.3s ease, top 0.3s ease, height 0.3s ease"
+          }}
+        />
+      );
+      y += sliderHeight + canvasSpacing;
+      otherElements.push(
+        <VolumeDown fontSize="small"
+          key="volume-down-label"
+          sx={{
+            position: "absolute", left: `${x}px`, top: `${y}px`,
+            transform: "translateX(-100%)",
+            transition: "left 0.3s ease, top 0.3s ease"
+          }}
+        ></VolumeDown>
       );
     }
   }

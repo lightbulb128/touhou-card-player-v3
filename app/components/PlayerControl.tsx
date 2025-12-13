@@ -5,6 +5,7 @@ import {
   SkipPreviousRounded as LeftIcon,
   PauseRounded as PauseIcon,
   PlayArrowRounded as PlayIcon,
+  VolumeDownRounded as VolumeDown, VolumeUpRounded as VolumeUp
 } from "@mui/icons-material";
 import { MonospaceFontFamily } from "./Theme";
 
@@ -14,9 +15,11 @@ export interface PlayerControlProps {
   currentCharacterId: CharacterId;
   playback: Playback;
   playbackState: PlaybackState;
+  volume: number;
   setPlayback: (playback: Playback) => void;
   setPlaybackTime?: (time: number) => void;
   setPlaybackState: (state: PlaybackState) => void;
+  setVolume: (volume: number) => void;
   onNextMusic: () => void;
   onPreviousMusic: () => void;
   onPlay(): void;
@@ -53,7 +56,8 @@ export default function PlayerControl({
   playback,
   playbackState,
   onNextMusic, onPreviousMusic, onPlay, onPause,
-  setPlaybackTime
+  setPlaybackTime,
+  volume, setVolume,
 }: PlayerControlProps) {
   const buttons = (
     <Stack direction="row" spacing={4} alignItems="center">
@@ -90,6 +94,18 @@ export default function PlayerControl({
         }}
       />
       <Typography fontFamily={MonospaceFontFamily}>{formatTime(playback.duration)}</Typography>
+    </Stack>
+    <Stack direction="row" spacing={3} alignItems="center" width="100%" justifyContent="center">
+      <VolumeDown></VolumeDown>
+      <Slider value={volume} 
+        min={0} max={1} step={0.10}
+        sx={{ width: "clamp(0px, 40%, 300px)" }}
+        onChange={(_, value) => {
+          const newVolume = Array.isArray(value) ? value[0] : value;
+          setVolume(newVolume);
+        }}
+      />
+      <VolumeUp></VolumeUp>
     </Stack>
     {buttons}
   </Stack>;
