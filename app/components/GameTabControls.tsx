@@ -1,7 +1,7 @@
 import { SxProps, Typography } from "@mui/material";
 import { Box, Stack } from "@mui/system";
 import { IconButton } from "@mui/material";
-import { theme } from "./Theme";
+import { NoFontFamily, theme } from "./Theme";
 
 export interface GameButtonProps {
   text?: string;
@@ -88,6 +88,7 @@ export function GameButton({
           userSelect: "none",
           pointerEvents: props.disabled ? "none" : "auto",
           textWrap: "nowrap",
+          fontFamily: NoFontFamily,
         }}
       >
         {props.text}

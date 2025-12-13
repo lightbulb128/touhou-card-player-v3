@@ -20,7 +20,8 @@ import {
   StartRounded
 } from "@mui/icons-material";
 import { GameButton } from "./GameTabControls";
-import { MonospaceFontFamily } from "./Theme";
+import { MonospaceFontFamily, NoFontFamily } from "./Theme";
+import { GetLocalizedString, Localization } from "../types/Localization";
 
 
 export interface GameTabProps {
@@ -1196,7 +1197,7 @@ export default function GameTab({
       otherElements.push(
         <GameButton 
           key="card-smaller-button" 
-          text="Card Smaller" 
+          text={GetLocalizedString(Localization.GameCardSmaller)}
           onClick={handleCardSmaller} 
           disabled={disabled} 
           sx={{ 
@@ -1216,7 +1217,7 @@ export default function GameTab({
       otherElements.push(
         <GameButton 
           key="card-larger-button" 
-          text="Card Larger" 
+          text={GetLocalizedString(Localization.GameCardLarger)} 
           onClick={handleCardLarger} 
           disabled={disabled} 
           sx={{ 
@@ -1238,18 +1239,21 @@ export default function GameTab({
         isRemotePlayerOpponent &&
         judge.confirmations.start.one()
       )
-      let text = isStopGameButton ? "Stop" : "Start";
+      let text = (isStopGameButton 
+        ? GetLocalizedString(Localization.GameStop) 
+        : GetLocalizedString(Localization.GameStart)
+      );
       if (contained) {
         if (judge.confirmations.start.ok[0]) {
-          text = "waiting for opponent ...";
+          text = GetLocalizedString(Localization.GameStartWaitingForOpponent);
           disabled = true;
         } else {
-          text = "Start";
+          text = GetLocalizedString(Localization.GameStart);
         }
       }
       const isGameFinished = judge.isGameFinished();
-      if (isGameFinished) {
-        text = "Finish";
+      if (judge.state !== GameJudgeState.SelectingCards && isGameFinished) {
+        text = GetLocalizedString(Localization.GameFinish);
       }
       otherElements.push(
         <GameButton 
@@ -1277,7 +1281,7 @@ export default function GameTab({
       otherElements.push(
         <GameButton 
           key="random-fill-button"
-          text="Random Fill"
+          text={GetLocalizedString(Localization.GameRandomFill)}
           onClick={() => {
             judge.randomFillDeck(0, true);
             setJudge(judge.reconstruct());
@@ -1299,7 +1303,7 @@ export default function GameTab({
       otherElements.push(
         <GameButton 
           key="clear-deck-button"
-          text="Clear Deck"
+          text={GetLocalizedString(Localization.GameClearDeck)}
           onClick={() => {
             judge.clearDeck(0, true);
             setJudge(judge.reconstruct());
@@ -1321,7 +1325,7 @@ export default function GameTab({
       otherElements.push(
         <GameButton 
           key="shuffle-deck-button"
-          text="Shuffle Deck"
+          text={GetLocalizedString(Localization.GameShuffleDeck)}
           onClick={() => {
             judge.shuffleDeck(0, true);
             setJudge(judge.reconstruct());
@@ -1340,11 +1344,15 @@ export default function GameTab({
     { // switch mode button
       const hidden = judge.state !== GameJudgeState.SelectingCards;
       let text = "";
-      if (judge.opponentType === OpponentType.None) { text = "No opponent" }
-      else if (judge.opponentType === OpponentType.CPU) { text = "CPU opponent" }
+      if (judge.opponentType === OpponentType.None) { 
+        text = GetLocalizedString(Localization.GameOpponentNoOpponent);
+      }
+      else if (judge.opponentType === OpponentType.CPU) { 
+        text = GetLocalizedString(Localization.GameOpponentCPUOpponent); 
+      }
       else {
-        if (judge.isServer) { text = "PvP (Server)" }
-        else { text = "PvP (Client)" }
+        if (judge.isServer) { text = GetLocalizedString(Localization.GameOpponentRemoteAsServer); }
+        else { text = GetLocalizedString(Localization.GameOpponentRemoteAsClient); }
       }
       otherElements.push(
         <GameButton 
@@ -1602,18 +1610,21 @@ export default function GameTab({
       let text = "";
       if (contained) {
         if (judge.confirmations.next.ok[1]) {
-          text = "opponent waiting ...";
+          text = GetLocalizedString(Localization.GameNextTurnOpponentWaiting);
         } else {
-          text = "waiting for opponent ...";
+          text = GetLocalizedString(Localization.GameNextTurnWaitingForOpponent);
           clickable = false;
         }
       }
       if (judge.state === GameJudgeState.TurnWinnerDetermined && judge.givesLeft > 0) {
-        text = `Give ${judge.givesLeft} card${judge.givesLeft > 1 ? "s" : ""}`;
+        text = GetLocalizedString(Localization.GameNextTurnGiveCards, new Map<string, string>([
+          ["givesLeft", judge.givesLeft.toString()],
+          ["plural", judge.givesLeft > 1 ? "s" : ""],
+        ]));
       }
       if (judge.isGameFinished()) {
         clickable = false;
-        text = "Game Finished";
+        text = GetLocalizedString(Localization.GameNextTurnGameFinished);
       }
       if (judge.state === GameJudgeState.TurnCountdownNext) {
         clickable = false;
@@ -1641,12 +1652,21 @@ export default function GameTab({
       if (judge.givesLeft != 0) {
         let text = "";
         if (judge.givesLeft > 0) {
-          text = `Give ${judge.givesLeft} card${judge.givesLeft > 1 ? "s" : ""} to opponent, or directly click next turn to give randomly.`;
+          text = GetLocalizedString(Localization.GameInstructionGiveCards, new Map<string, string>([
+            ["givesLeft", judge.givesLeft.toString()],
+            ["plural", judge.givesLeft > 1 ? "s" : ""],
+          ]));
         } else if (judge.givesLeft < 0 && judge.hasRemotePlayer()) {
-          text = `You need to receive ${-judge.givesLeft} card${-judge.givesLeft > 1 ? "s" : ""} from opponent. Please wait for opponent to give you cards.`;
+          text = GetLocalizedString(Localization.GameInstructionReceiveCards, new Map<string, string>([
+            ["receives", (-judge.givesLeft).toString()],
+            ["plural", -judge.givesLeft > 1 ? "s" : ""],
+          ]));
           clickable = false;
         } else if (judge.givesLeft < 0 && !judge.hasRemotePlayer()) {
-          text = `You will receive ${-judge.givesLeft} card${-judge.givesLeft > 1 ? "s" : ""} from opponent when moving to next turn.`;
+          text = GetLocalizedString(Localization.GameInstructionReceiveCardsCPU, new Map<string, string>([
+            ["receives", (-judge.givesLeft).toString()],
+            ["plural", -judge.givesLeft > 1 ? "s" : ""],
+          ]));
         }
         if (judge.isGameFinished()) {
           text = "";
@@ -1662,6 +1682,7 @@ export default function GameTab({
                 left: `${deckLeft}px`,
                 top: `${playerDeckBottom + canvasMargin}px`,
                 width: `${deckWidth}px`,
+                fontFamily: NoFontFamily,
               }}
             >
               {text}
@@ -1700,8 +1721,8 @@ export default function GameTab({
             sx={{
               width: "100%",
               height: "100%",
-            alignItems: "center",
-            justifyContent: "center",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             <Typography 
@@ -1712,9 +1733,12 @@ export default function GameTab({
                 height: `${textHeight}px`,
                 width: "100%",
                 paddingLeft: "4px",
+                fontFamily: NoFontFamily,
               }}
             >
-              {isServer ? "Share this code with the remote client player" : "Enter the code from the remote server player"}
+              {isServer 
+                ? GetLocalizedString(Localization.GameConnectShareCodeInstruction) 
+                : GetLocalizedString(Localization.GameConnectEnterCodeInstruction)}
             </Typography>
             <TextField
               size="small"
@@ -1722,8 +1746,10 @@ export default function GameTab({
               sx={{ 
                 width: "100%",
               }}
-              value={isServer ? (peer.peer?.id ?? "Generating...") : remotePlayerIdInput}
-              
+              slotProps={{
+                input: { style: { fontFamily: NoFontFamily } }
+              }}
+              value={isServer ? (peer.peer?.id ?? GetLocalizedString(Localization.GameConnectionGeneratingId)) : remotePlayerIdInput}
               onChange={(e) => {
                 setRemotePlayerIdInput(e.target.value);
               }}
@@ -1732,9 +1758,10 @@ export default function GameTab({
               onClick={() => {
                 peer.connectToPeer(remotePlayerIdInput);
               }}
+              sx={{fontFamily: NoFontFamily}}
               variant="outlined"
             >
-              Connect
+              {GetLocalizedString(Localization.GameConnectionConnect)}
             </Button>}
             {isServer && <Stack
               direction="row"
@@ -1746,10 +1773,11 @@ export default function GameTab({
                 }}
                 variant="outlined"
                 color="secondary"
+                sx={{fontFamily: NoFontFamily}}
               >
                 {(peer.peer?.id === null || peer.peer?.id === undefined)
-                  ? "Retry"
-                  : "Regenerate"}
+                  ? GetLocalizedString(Localization.GameConnectionRetryGeneration)
+                  : GetLocalizedString(Localization.GameConnectionRegenerate)}
               </Button>
               <Button
                 onClick={() => {
@@ -1758,10 +1786,11 @@ export default function GameTab({
                     navigator.clipboard.writeText(peer.peer.id);
                   }
                 }}
+                sx={{fontFamily: NoFontFamily}}
                 disabled={peer.peer?.id === null || peer.peer?.id === undefined}
                 variant="outlined"
               >
-                Copy to Clipboard
+                {GetLocalizedString(Localization.GameConnectionCopyToClipboard)}
               </Button>
             </Stack>}
           </Stack>
@@ -1770,8 +1799,8 @@ export default function GameTab({
     }
   }
 
-  { // opponent deck left
-    // region op left
+  { // opponent deck right
+    // region op right
     const x = deckRight + canvasMargin;
     let y = opponentDeckBottom - buttonSize;
     { // traditional mode button
@@ -1780,7 +1809,9 @@ export default function GameTab({
         <GameButton
           key="opponent-traditional-mode-button"
           hidden={hidden}
-          text={judge.traditionalMode ? "Classic Mode" : "Leisure Mode"}
+          text={judge.traditionalMode 
+            ? GetLocalizedString(Localization.GameModeTraditional) 
+            : GetLocalizedString(Localization.GameModeNonTraditional)}
           onClick={() => {
             judge.traditionalMode = !judge.traditionalMode;
             sendEvent({
@@ -1801,8 +1832,8 @@ export default function GameTab({
     { // traditional mode explanation
       const hidden = judge.state !== GameJudgeState.SelectingCards;
       const text = (judge.traditionalMode 
-        ? "Classic Mode: Wrong picks make you receive cards from the opponent. You win by emptying your deck first."
-        : "Leisure Mode: Wrong picks are ignored. You win by collecting more cards."
+        ? GetLocalizedString(Localization.GameModeTraditionalDescription)
+        : GetLocalizedString(Localization.GameModeNonTraditionalDescription)
       )
       otherElements.push(
         <Typography
@@ -1816,6 +1847,7 @@ export default function GameTab({
             width: `${deckWidth - buttonSize * 2 - canvasMargin}px`,
             opacity: hidden ? 0.0 : 1.0,
             transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
+            fontFamily: NoFontFamily,
           }}
         >
           {text.split("\n").map((line, index) => (
@@ -1835,7 +1867,7 @@ export default function GameTab({
           key="shuffle-opponent-deck-button"
           disabled={disabled}
           hidden={hidden}
-          text="Shuffle Deck"
+          text={GetLocalizedString(Localization.GameShuffleDeck)}
           onClick={() => {
             judge.shuffleDeck(1, true);
             setJudge(judge.reconstruct());
@@ -1857,7 +1889,7 @@ export default function GameTab({
           key="clear-opponent-deck-button"
           disabled={disabled}
           hidden={hidden}
-          text="Clear Deck"
+          text={GetLocalizedString(Localization.GameClearDeck)}
           onClick={() => {
             judge.clearDeck(1, true);
             setJudge(judge.reconstruct());
@@ -1879,7 +1911,7 @@ export default function GameTab({
           key="random-fill-opponent-deck-button"
           disabled={disabled}
           hidden={hidden}
-          text="Random Fill"
+          text={GetLocalizedString(Localization.GameRandomFill)}
           onClick={() => {
             judge.randomFillDeck(1, true);
             setJudge(judge.reconstruct());
@@ -1916,9 +1948,10 @@ export default function GameTab({
             transform: "translateX(-100%)",
             opacity: hidden ? 0.0 : 1.0,
             transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
+            fontFamily: NoFontFamily,
           }}
         >
-          CPU Opponent
+          {GetLocalizedString(Localization.GameOpponentSettingTitle)}
         </Typography>
       );
       y += 24 + canvasSpacing;
@@ -1936,9 +1969,10 @@ export default function GameTab({
             transform: "translateX(-100%)",
             opacity: hidden ? 0.0 : 1.0,
             transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
+            fontFamily: NoFontFamily,
           }}
         >
-          Reaction Speed
+          {GetLocalizedString(Localization.GameOpponentSettingReactionTime)}
         </Typography>
       );
       y += 24 + canvasSpacing;
@@ -1950,7 +1984,7 @@ export default function GameTab({
           type="number"
           size="small"
           value={cpuOpponentSetting.reactionTimeMean}
-          label="Mean (s)"
+          label={GetLocalizedString(Localization.GameOpponentSettingReactionTimeMean)}
           disabled={hidden}
           onChange={(e) => {
             let val = parseFloat(e.target.value);
@@ -1967,7 +2001,8 @@ export default function GameTab({
               min: 0.5,
               max: 10,
               step: 0.5,
-            }
+            },
+            inputLabel: { style: { fontFamily: NoFontFamily } },
           }}
           sx={{
             width: "160px",
@@ -1990,7 +2025,7 @@ export default function GameTab({
           type="number"
           size="small"
           value={cpuOpponentSetting.reactionTimeStdDev}
-          label="Standard Deviation (s)"
+          label={GetLocalizedString(Localization.GameOpponentSettingReactionTimeStdDev)}
           disabled={hidden}
           onChange={(e) => {
             let val = parseFloat(e.target.value);
@@ -2007,7 +2042,8 @@ export default function GameTab({
               min: 0.0,
               max: 5,
               step: 0.1,
-            }
+            },
+            inputLabel: { style: { fontFamily: NoFontFamily } },
           }}
           sx={{
             width: "160px",
@@ -2036,9 +2072,10 @@ export default function GameTab({
             transform: "translateX(-100%)",
             opacity: hidden ? 0.0 : 1.0,
             transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
+            fontFamily: NoFontFamily,
           }}
         >
-          Mistake Rate
+          {GetLocalizedString(Localization.GameOpponentSettingMistakeRate)}
         </Typography>
       );
       y += 24 + canvasSpacing; 
@@ -2050,7 +2087,7 @@ export default function GameTab({
           type="number"
           size="small"
           value={cpuOpponentSetting.mistakeRate * 100.0}
-          label="Mistake Rate (%)"
+          label={GetLocalizedString(Localization.GameOpponentSettingMistakeRate)}
           disabled={hidden}
           onChange={(e) => {
             let val = parseFloat(e.target.value);
@@ -2067,7 +2104,8 @@ export default function GameTab({
               min: 0.0,
               max: 100.0,
               step: 1.0,
-            }
+            },
+            inputLabel: { style: { fontFamily: NoFontFamily } },
           }}
           sx={{
             width: "160px",
@@ -2167,9 +2205,10 @@ export default function GameTab({
             top: `${unusedCardsBottom + canvasSpacing}px`,
             transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
             opacity: unusedCards.length > 0 ? 1.0 : 0.0,
+            fontFamily: NoFontFamily,
           }}
         >
-          Unused cards
+          {GetLocalizedString(Localization.GameUnusedCards)}
         </Typography>
 
         {otherElements.map((element) => element)}

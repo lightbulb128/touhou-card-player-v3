@@ -9,14 +9,15 @@ import {
   MusicUniqueId, Playback, PlaybackSetting, 
   PlaybackState 
 } from "./types/Configs";
-import { Box, Button, CssBaseline, Paper, Stack, Tab, Tabs } from "@mui/material";
+import { Box, Button, CssBaseline, Paper, Stack } from "@mui/material";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
-import { theme } from "./components/Theme";
+import { NoFontFamily, theme } from "./components/Theme";
 import CustomTabs from "./components/CustomTabs";
 import ListTab from "./components/ListTab";
 import GameTab from "./components/GameTab";
 import ConfigTab from "./components/ConfigTab";
 import { DefaultMusicSource } from "./types/Consts";
+import { GetLocalizedString, Localization, setLocale } from "./types/Localization";
 
 function TabContainer({
   children
@@ -158,6 +159,26 @@ export default function Home() {
     load().catch((err) => {
       console.error("Failed to load public data", err);
     });
+
+    // get locale from query params
+    const params = new URLSearchParams(window.location.search);
+    const localeParam = params.get("locale");
+    let localeSet = false;
+    if (localeParam === "en" || localeParam === "zh") {
+      setLocale(localeParam);
+      localeSet = true;
+    }
+
+    if (!localeSet) {
+      // detect browser locale
+      const browserLang = navigator.language || navigator.languages[0] || "en";
+      if (browserLang.startsWith("zh")) {
+        setLocale("zh");
+      } else {
+        setLocale("en");
+      }
+    }
+
   }, []);
 
   // update audio source when currentCharacterId
@@ -199,7 +220,6 @@ export default function Home() {
         if (audioElementRef.current) {
           audioElementRef.current.pause();
         }
-        console.log("Auto pausing playback due to timeout");
         setPlaybackState(PlaybackState.TimeoutPause);
         setPauseTimeoutHandle(null);
       }, playbackSetting.playbackDuration * 1000);
@@ -356,6 +376,9 @@ export default function Home() {
           if (onClick) onClick();
         }}
         disabled={disabled}
+        sx={{
+          fontFamily: NoFontFamily,
+        }}
       >
         {name}
       </Button>
@@ -404,10 +427,10 @@ export default function Home() {
           width: "100%", alignItems: "center", paddingTop: 2
         }}>
           <Stack direction="row" spacing={2}>
-            {tabButton(0, "Player", reloadOutOfGameCountdown, inGame)}
-            {tabButton(1, "List", reloadOutOfGameCountdown, inGame)}
-            {tabButton(2, "Configs", reloadOutOfGameCountdown, inGame)}
-            {tabButton(3, "Practice", () => {
+            {tabButton(0, GetLocalizedString(Localization.TabNamePlayer), reloadOutOfGameCountdown, inGame)}
+            {tabButton(1, GetLocalizedString(Localization.TabNameList), reloadOutOfGameCountdown, inGame)}
+            {tabButton(2, GetLocalizedString(Localization.TabNameConfigs), reloadOutOfGameCountdown, inGame)}
+            {tabButton(3, GetLocalizedString(Localization.TabNameAbout), () => {
               setOutOfGameUseCountdown(playbackSetting.countdown);
               setPlaybackSetting((original) => {
                 return { ...original, countdown: false };

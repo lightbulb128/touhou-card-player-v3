@@ -15,7 +15,7 @@ const whitney = localFont({
 });
 
 const MonospaceFontFamily = `${inconsolata.style.fontFamily}, Consolas, 'Courier New', monospace`;
-const DefaultFontFamily = `${yugothicb.style.fontFamily}, ${whitney.style.fontFamily}, sans-serif`;
+const DefaultFontFamily = `${whitney.style.fontFamily}, ${yugothicb.style.fontFamily}, sans-serif`;
 const NoFontFamily = `${whitney.style.fontFamily}, sans-serif`;
 
 declare module '@mui/material/styles' {

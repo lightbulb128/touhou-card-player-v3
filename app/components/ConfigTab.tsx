@@ -12,6 +12,7 @@ import {
   Search
 } from "@mui/icons-material";
 import { MonospaceFontFamily, NoFontFamily } from "./Theme";
+import { GetLocalizedString, Localization } from "../types/Localization";
 
 interface ConfigDrawerProps {
   title: string;
@@ -46,7 +47,7 @@ function ConfigDrawer({...props}: ConfigDrawerProps) {
           }}
           onClick={() => setOpen(!open)}
         >
-          <Typography variant="body1">
+          <Typography variant="body1" fontFamily={NoFontFamily}>
             {props.title}
           </Typography>
           <Button
@@ -108,7 +109,7 @@ export default function ConfigTab(props: ConfigTabProps) {
     props.data.characterConfigs.forEach((config, charId) => {
       selectionMap.set(charId, 0);
     });
-    presets.set("Default", selectionMap);
+    presets.set(GetLocalizedString(Localization.ConfigTabPresetDefault), selectionMap);
   }
   { // already
     props.data.presets.forEach((selectionMap, name) => {
@@ -129,7 +130,7 @@ export default function ConfigTab(props: ConfigTabProps) {
           selectionMap.set(charId, -1);
         }
       });
-      presets.set(`Disable ${tag}`, selectionMap);
+      presets.set(GetLocalizedString(Localization.ConfigTabPresetDisable) + tag, selectionMap);
     }); 
   }
 
@@ -181,7 +182,7 @@ export default function ConfigTab(props: ConfigTabProps) {
           alignContent: "center",
         }}
       >
-        <ConfigDrawer title="Card Collection">
+        <ConfigDrawer title={GetLocalizedString(Localization.ConfigTabCardCollection)}>
           <Stack direction="column" spacing={1}
             sx={{width: "100%"}}
           >
@@ -208,8 +209,12 @@ export default function ConfigTab(props: ConfigTabProps) {
                         sx={{
                           height: "2em"
                         }}
+                        disabled={props.data.cardCollection === key}
                       >
-                        {props.data.cardCollection === key ? "Selected" : "Select"}
+                        {props.data.cardCollection === key 
+                          ? GetLocalizedString(Localization.ConfigTabSelected) 
+                          : GetLocalizedString(Localization.ConfigTabSelect)
+                        }
                       </Button>
                     </Grid>
                     <Grid size={6}>
@@ -235,7 +240,7 @@ export default function ConfigTab(props: ConfigTabProps) {
             })}
           </Stack>
         </ConfigDrawer>
-        <ConfigDrawer title="Music Sources">
+        <ConfigDrawer title={GetLocalizedString(Localization.ConfigTabMusicSource)}>
           <Stack direction="column" spacing={1}
             sx={{width: "100%"}}
           >
@@ -270,8 +275,12 @@ export default function ConfigTab(props: ConfigTabProps) {
                         sx={{
                           height: "2em"
                         }}
+                        disabled={musicSourceKey === key}
                       >
-                        {musicSourceKey === key ? "Selected" : "Select"}
+                        {musicSourceKey === key 
+                          ? GetLocalizedString(Localization.ConfigTabSelected) 
+                          : GetLocalizedString(Localization.ConfigTabSelect)
+                        }
                       </Button>
                     </Grid>
                     <Grid size={12}>
@@ -285,7 +294,7 @@ export default function ConfigTab(props: ConfigTabProps) {
             })}
           </Stack>
         </ConfigDrawer>
-        <ConfigDrawer title="Music Selection Presets">
+        <ConfigDrawer title={GetLocalizedString(Localization.ConfigTabMusicSelectionPresets)}>
           <Stack direction="column" spacing={1}
             sx={{width: "100%"}}
           >
@@ -328,7 +337,9 @@ export default function ConfigTab(props: ConfigTabProps) {
                           height: "2em"
                         }}
                       >
-                        Apply
+                        {fullyApplied 
+                          ? GetLocalizedString(Localization.ConfigTabApplied) 
+                          : GetLocalizedString(Localization.ConfigTabApply)}
                       </Button>
                     </Grid>
                   </Grid>
@@ -337,7 +348,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                       {Array.from(selectionMap).map(([charId, musicId]) => {
                         const applied = props.musicSelection.get(charId) === musicId;
                         const icon = applied ? <FullIcon fontSize="small"/> : <NoneIcon fontSize="small"/>;
-                        let musicName = "Disabled";
+                        let musicName = GetLocalizedString(Localization.ConfigTabPresetDisable);
                         if (musicId != -1) {
                           const nameId = props.data.characterConfigs.get(charId)?.musics[musicId];
                           if (nameId) {
@@ -365,21 +376,25 @@ export default function ConfigTab(props: ConfigTabProps) {
             })}
           </Stack>
         </ConfigDrawer>
-        <ConfigDrawer title="Music Selection Single">
+        <ConfigDrawer title={GetLocalizedString(Localization.ConfigTabMusicSelectionSingle)}>
           <Stack direction="column" spacing={1}
             sx={{width: "100%"}}
           >
             <Stack direction="row" spacing={1} alignItems="center">
               <Search fontSize="small" />
-              <TextField fullWidth variant="filled" size="small" label="Search Character"
+              <TextField fullWidth variant="filled" size="small" 
+                label={GetLocalizedString(Localization.ConfigTabSearchCharacter)}
                 value={searchText}
                 onChange={(e) => {
                   setSearchText(e.target.value);
                 }}
-                slotProps={{ input: { 
-                  style: { 
-                    fontFamily: NoFontFamily 
-                  }
+                slotProps={{ 
+                  input: { 
+                    style: { 
+                      fontFamily: NoFontFamily 
+                    }
+                  },
+                  inputLabel: { style: { fontFamily: NoFontFamily } 
                 }}}
               />
             </Stack>
@@ -409,7 +424,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                       }}
                     >
                       <MenuItem value={-1}>
-                        <Typography variant="body2">Disable</Typography>
+                        <Typography variant="body2">{GetLocalizedString(Localization.ConfigTabPresetDisable)}</Typography>
                       </MenuItem>
                       {config.musics.map((musicNameId, index) => {
                         const musicInfo = getMusicInfo(musicNameId);

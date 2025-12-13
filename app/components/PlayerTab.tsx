@@ -11,6 +11,8 @@ import PlayerControl from "./PlayerControl";
 import MusicCardDisplay from "./MusicCardDisplay";
 import { CardBackgroundState, CharacterCard } from "./CharacterCard";
 import { useEffect, useState } from "react";
+import { GetLocalizedString, Localization } from "../types/Localization";
+import { NoFontFamily } from "./Theme";
 
 
 export interface PlayerTabProps {
@@ -232,8 +234,8 @@ export default function PlayerTab({
           onPause={onPause}
         ></PlayerControl>
         <Stack direction="column" spacing={1} width="100%">
-          <Typography variant="body1" color="text.secondary">
-            Upcoming (click to disable)
+          <Typography variant="body1" color="text.secondary" fontFamily={NoFontFamily}>
+            {GetLocalizedString(Localization.PlayerTabUpcoming)}
           </Typography>
           <Stack direction="row" spacing={0}
             sx={{
@@ -248,38 +250,41 @@ export default function PlayerTab({
         </Stack>
         <Stack direction="column" spacing={1} width="100%">
           <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
-            <Button variant="outlined" sx={{ width: "8rem" }} color="secondary" onClick={() => {
+            <Button variant="outlined" sx={{ width: "8rem", fontFamily: NoFontFamily }} color="secondary" onClick={() => {
               regeneratePlayingOrder(true);
-            }}>Shuffle</Button>
-            <Button variant="outlined" sx={{ width: "8rem" }} color="secondary" onClick={() => {
+            }}>{GetLocalizedString(Localization.PlayerTabShuffle)}</Button>
+            <Button variant="outlined" sx={{ width: "8rem", fontFamily: NoFontFamily }} color="secondary" onClick={() => {
               regeneratePlayingOrder(false);
-            }}>Sort</Button>
+            }}>{GetLocalizedString(Localization.PlayerTabSort)}</Button>
           </Stack>
           <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
             <Button 
               variant={playbackSetting.randomStartPosition ? "contained" : "outlined"}
-              sx={{ width: "8rem" }} 
+              sx={{ width: "8rem", fontFamily: NoFontFamily }}
               onClick={() => {
                 setPlaybackSetting({
                   ...playbackSetting,
                   randomStartPosition: !playbackSetting.randomStartPosition,
                 });
               }}
-            >Random start</Button>
+            >{GetLocalizedString(Localization.PlayerTabRandomStart)}</Button>
             <Button 
               variant={playbackSetting.countdown ? "contained" : "outlined"}
-              sx={{ width: "8rem" }} 
+              sx={{ width: "8rem", fontFamily: NoFontFamily }} 
               onClick={() => {
                 setPlaybackSetting({
                   ...playbackSetting,
                   countdown: !playbackSetting.countdown,
                 });
               }}
-            >Countdown</Button>
+            >{GetLocalizedString(Localization.PlayerTabCountdown)}</Button>
           </Stack>
           <Stack direction="row" paddingTop={1} spacing={1} width="100%" alignItems="center" justifyContent="center">
             <TextField
-              label="Playback Duration (s; 0 = infinite)"
+              label={GetLocalizedString(Localization.PlayerTabPlaybackDurationLabel)}
+              slotProps={{
+                inputLabel: { style: { fontFamily: NoFontFamily } },
+              }}
               value={playbackDurationString}
               onChange={(e) => setPlaybackDurationString(e.target.value)}
               sx={{ width: "16rem" }}
