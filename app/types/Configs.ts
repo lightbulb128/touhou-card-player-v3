@@ -5,6 +5,7 @@ type CharacterConfig = {
   id: CharacterId;
   card: Array<CardId>;
   musics: Array<MusicUniqueId>;
+  searchNames?: Array<string>;
   tags: Array<string>;
 }
 type MusicSourceMap = Map<MusicUniqueId, string>;
@@ -60,6 +61,7 @@ class GlobalData {
         card: card,
         musics: music,
         tags: charConfig.tags || [],
+        searchNames: charConfig.searchNames || undefined,
       });
     }
   };

@@ -401,7 +401,18 @@ export default function ConfigTab(props: ConfigTabProps) {
             <Divider />
             {Array.from(props.data.characterConfigs).map(([charId, config]) => {
               if (searchText !== "") {
-                if (!charId.toLowerCase().includes(searchText.toLowerCase())) {
+                let searchNames = config.searchNames;
+                if (!searchNames) {
+                  searchNames = [charId];
+                }
+                let found = false;
+                for (const name of searchNames) {
+                  if (name.toLowerCase().includes(searchText.toLowerCase())) {
+                    found = true;
+                    break;
+                  }
+                }
+                if (!found) {
                   return null;
                 }
               }
