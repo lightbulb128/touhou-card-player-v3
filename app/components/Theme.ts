@@ -9,6 +9,13 @@ const yugothicb = localFont({
   src: "../fonts/YuGothic-Bold-01.ttf", 
   variable: "--font-yu-gothic-bold"
 });
+const whitney = localFont({ 
+  src: "../fonts/WHITNEY-MEDIUM.ttf", 
+  variable: "--font-whitney"
+});
+
+const MonospaceFontFamily = `${inconsolata.style.fontFamily}, Consolas, 'Courier New', monospace`;
+const DefaultFontFamily = `${yugothicb.style.fontFamily}, ${whitney.style.fontFamily}, sans-serif`;
 
 export default function CreateTheme() {
   const themeColors = {
@@ -37,8 +44,9 @@ export default function CreateTheme() {
     },
     // shape: { borderRadius: 14 },
     typography: {
-      fontFamily: `${inconsolata.style.fontFamily}, ${yugothicb.style.fontFamily}, sans-serif`,
+      fontFamily: DefaultFontFamily,
       button: { textTransform: "none" },      
     }
   });
 }
+

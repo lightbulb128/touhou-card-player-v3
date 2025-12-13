@@ -50,7 +50,6 @@ export function GameButton({
       direction={props.textOnLeft ? "row-reverse" : "row"}
       spacing={1}
       sx={{
-        cursor: props.disabled ? "default" : "pointer",
         userSelect: "none",
         transition: "left 0.2s ease, top 0.2s ease, opacity 0.2s ease",
         // align vertically center
@@ -61,9 +60,10 @@ export function GameButton({
       }}
     >
       <IconButton 
-        onClick={props.onClick} disabled={props.disabled}
+        onClick={(!props.disabled && !props.hidden) ? props.onClick : undefined} disabled={props.disabled}
         color={props.color || "primary"}
         sx={{
+          cursor: (props.disabled || props.hidden) ? "default" : "pointer",
           border: props.bordered ? (
             props.disabled ? "1px solid rgba(0,0,0,0.12)" : "1px solid"
           ) : "none",

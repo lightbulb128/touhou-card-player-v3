@@ -57,6 +57,8 @@ export default function Home() {
   const [pauseTimeoutHandle, setPauseTimeoutHandle] = useState<NodeJS.Timeout | null>(null);
   const [playbackState, setPlaybackState] = useState<PlaybackState>(PlaybackState.Stopped);
   const [outOfGameUseCountdown, setOutOfGameUseCountdown] = useState<boolean>(false);
+  const [inGame, setInGame] = useState<boolean>(false);
+
 
   // region utility funcs
   const getMusicId = (character: CharacterId): MusicUniqueId | null => {
@@ -313,7 +315,24 @@ export default function Home() {
       audioElementRef.current.pause();
     }
     setPlaybackState(PlaybackState.Stopped);
+    setInGame(true);
     return newOrder;
+  }
+
+  const handleGameEnd = () => {
+    setInGame(false);
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+    }
+    setPlaybackState(PlaybackState.Stopped);
+    if (pauseTimeoutHandle) {
+      clearTimeout(pauseTimeoutHandle);
+      setPauseTimeoutHandle(null);
+    }
+    if (countdownAudioElementRef.current) {
+      countdownAudioElementRef.current.pause();
+      countdownAudioElementRef.current.currentTime = 0;
+    }
   }
 
   const playCountdownAudio = () => {
@@ -327,7 +346,7 @@ export default function Home() {
   }
 
   // region render
-  const tabButton = (id: number, name: string, onClick?: () => void) => {
+  const tabButton = (id: number, name: string, onClick?: () => void, disabled?: boolean) => {
     return (
       <Button
         key={name}
@@ -336,6 +355,7 @@ export default function Home() {
           setActiveTab(id);
           if (onClick) onClick();
         }}
+        disabled={disabled}
       >
         {name}
       </Button>
@@ -384,9 +404,9 @@ export default function Home() {
           width: "100%", alignItems: "center", paddingTop: 2
         }}>
           <Stack direction="row" spacing={2}>
-            {tabButton(0, "Player", reloadOutOfGameCountdown)}
-            {tabButton(1, "List", reloadOutOfGameCountdown)}
-            {tabButton(2, "Configs", reloadOutOfGameCountdown)}
+            {tabButton(0, "Player", reloadOutOfGameCountdown, inGame)}
+            {tabButton(1, "List", reloadOutOfGameCountdown, inGame)}
+            {tabButton(2, "Configs", reloadOutOfGameCountdown, inGame)}
             {tabButton(3, "Practice", () => {
               setOutOfGameUseCountdown(playbackSetting.countdown);
               setPlaybackSetting((original) => {
@@ -450,12 +470,15 @@ export default function Home() {
                 notifyPauseMusic={handleGamePauseMusic}
                 notifyPlayMusic={handlePlay}
                 playbackState={playbackState}
+                playbackSetting={playbackSetting}
                 notifyGameStart={handleGameStart}
+                notifyGameEnd={handleGameEnd}
                 notifyPlayCountdownAudio={playCountdownAudio}
                 setCurrentCharacterId={setCurrentCharacterId}
                 setPlayingOrder={setPlayingOrder}
                 setCharacterTemporaryDisabled={setCharacterTemporaryDisabled}
                 setMusicSelection={setMusicSelection}
+                setPlaybackSetting={setPlaybackSetting}
               ></GameTab>
             </TabContainer>
           ]}>

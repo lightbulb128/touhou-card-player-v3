@@ -158,6 +158,15 @@ type EventResumeMusic = {
   type: "resumeMusic";
 };
 
+type EventSyncSettings = {
+  type: "syncSettings";
+  traditionalMode: boolean;
+  randomStartPosition: boolean;
+  playbackDuration: number;
+  deckColumns: number;
+  deckRows: number;
+}
+
 const hashSyncData = (data: SyncData): number => {
   let str = JSON.stringify(data);
   let hash = 0;
@@ -205,20 +214,22 @@ type Event = (
   EventConfirmNext | EventPickEvent |
   EventSyncWinnerDetermined | EventSyncStart | EventSyncNextTurn |
   EventStopGame | EventSwitchTraditionalMode | EventPauseMusic | EventResumeMusic |
-  EventGive
-);
+  EventGive | EventSyncSettings
+); 
 
 class GamePeer {
   peer: Peer | null;
   dataConnection: DataConnection | null;
   refresh: () => void;
   notifyDisconnected: () => void;
+  notifyConnected: (peer: GamePeer) => void;
 
   constructor() {
     this.peer = null;
     this.dataConnection = null;
     this.refresh = () => {};
     this.notifyDisconnected = () => {};
+    this.notifyConnected = () => {};
   }
 
   disconnect() {
@@ -232,6 +243,7 @@ class GamePeer {
     this.ensurePeerNotNull();
     this.dataConnection = this.peer!.connect(peerId);
     this.dataConnection.on("open", () => {
+      this.notifyConnected(this);
       this.refresh();
     });
     this.dataConnection.on("close", () => {
@@ -242,7 +254,7 @@ class GamePeer {
   }
 
   hasDataConnection(): boolean {
-    return this.dataConnection !== null && this.dataConnection.open;
+    return this.dataConnection !== null;
   }
 
   ensurePeerNotNull() {
@@ -253,13 +265,21 @@ class GamePeer {
       });
       this.peer.on("connection", (conn: DataConnection) => {
         this.dataConnection = conn;
+        this.dataConnection.on("open", () => {
+          this.notifyConnected(this);
+          this.refresh();
+        });
+        this.dataConnection.on("close", () => {
+          this.dataConnection?.removeAllListeners("data");
+          this.notifyDisconnected();
+          this.dataConnection = null;
+        });
         console.log("[GamePeer] Incoming connection from peer:", conn.peer);
         this.refresh();
       });
       this.peer.on("disconnected", () => {
         this.dataConnection?.removeAllListeners("data");
         this.dataConnection = null;
-        this.notifyDisconnected();
       });
     }
   }
@@ -271,7 +291,7 @@ class GamePeer {
 
   sendEvent(payload: Event) {
     if (!this.hasDataConnection()) {
-      console.warn("No data connection available to send selectCards event.");
+      console.warn("No data connection available to send event:", payload);
       return;
     }
     console.log("[GamePeer] Sending event:", payload);
@@ -1006,6 +1026,30 @@ class GameJudge {
     }
   }
 
+  resetGameState() {
+    this.state = GameJudgeState.SelectingCards;
+    this.confirmations = {
+      start: new GameConfirmation(),
+      next: new GameConfirmation(),
+    };
+    this.turnWinner = null;
+    if (this.countdownTimeout !== null) {
+      clearTimeout(this.countdownTimeout);
+    }
+    this.countdownTimeout = null;
+    this.turnStartTimestamp = null;
+    this.pickEvents = [];
+    this.collectedCards = [[], []];
+    this.givesLeft = 0;
+    this.clientWaitAcknowledge = false;
+    this.deck = [[], []];
+    for (let i = 0; i < this.deckRows * this.deckColumns; i++) {
+      this.deck[Alice].push(new CardInfo(null, 0));
+      this.deck[Bob].push(new CardInfo(null, 0));
+    }
+  }
+
+
   // this function is used to be passed to the GamePeer object.
   remoteEventListener(data: any): void {
 
@@ -1176,6 +1220,15 @@ class GameJudge {
           this.givesLeft += 1;
           this.g().refresh(this);
         }
+      }
+      case "syncSettings": {
+        const e = event as EventSyncSettings;
+        this.traditionalMode = e.traditionalMode;
+        this.deckRows = e.deckRows;
+        this.deckColumns = e.deckColumns;
+        this.resetGameState();
+        this.g().refresh(this);
+        break;
       }
     }
     this.outerRef.current?.notifyOuterEventHandler(event);

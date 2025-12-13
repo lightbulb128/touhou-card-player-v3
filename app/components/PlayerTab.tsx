@@ -10,7 +10,7 @@ import {
 import PlayerControl from "./PlayerControl";
 import MusicCardDisplay from "./MusicCardDisplay";
 import { CardBackgroundState, CharacterCard } from "./CharacterCard";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 
 export interface PlayerTabProps {
@@ -47,6 +47,10 @@ export default function PlayerTab({
   const [hoveringCharacterId, setHoveringCharacterId] = useState<CharacterId | null>(null);
   const [playbackDurationString, setPlaybackDurationString] = useState<string>("0");
   
+  useEffect(() => {
+    setPlaybackDurationString(playbackSetting.playbackDuration.toString());
+  }, [playbackSetting]);
+
   let currentIndex = playingOrder.indexOf(currentCharacterId);
   if (currentIndex === -1) {
     currentIndex = 0;

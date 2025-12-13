@@ -30,7 +30,9 @@ export interface GameTabProps {
   playingOrder: Array<CharacterId>;
   playback: Playback,
   playbackState: PlaybackState,
+  playbackSetting: PlaybackSetting,
   notifyGameStart: (order: Array<CharacterId> | null) => Array<CharacterId>;
+  notifyGameEnd: () => void;
   notifyPauseMusic: () => void;
   notifyPlayMusic: () => void;
   notifyPlayCountdownAudio: () => void;
@@ -38,6 +40,7 @@ export interface GameTabProps {
   setPlayingOrder: (order: Array<CharacterId>) => void;
   setCharacterTemporaryDisabled: (map: Map<CharacterId, boolean>) => void;
   setMusicSelection: (map: MusicSelectionMap) => void;
+  setPlaybackSetting: (setting: PlaybackSetting) => void;
 }
 
 type CardRenderProps = {
@@ -84,6 +87,11 @@ type TimerState = {
   time: number;
   intervalHandle: NodeJS.Timeout | null;
 }
+type CPUOpponentSetting = {
+  reactionTimeMean: number;
+  reactionTimeStdDev: number;
+  mistakeRate: number;
+}
 
 function getCardTransitionString(duration: string): string {
   return `top ${duration}, left ${duration}, transform ${duration}, background-color ${duration}, width ${duration}, height ${duration}`;
@@ -97,7 +105,9 @@ export default function GameTab({
   playingOrder,
   playback,
   playbackState,
+  playbackSetting,
   notifyGameStart,
+  notifyGameEnd,
   notifyPauseMusic,
   notifyPlayMusic,
   notifyPlayCountdownAudio,
@@ -105,6 +115,7 @@ export default function GameTab({
   setPlayingOrder,
   setCharacterTemporaryDisabled,
   setMusicSelection,
+  setPlaybackSetting
 }: GameTabProps) {
 
   // region states
@@ -139,11 +150,16 @@ export default function GameTab({
   const [hoveringCardInfo, setHoveringCardInfo] = useState<CardInfo | null>(null);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [remotePlayerIdInput, setRemotePlayerIdInput] = useState<string>("");
-  const [remoteSyncIntervalHandle, setRemoteSyncIntervalHandle] = useState<NodeJS.Timeout | null>(null);
   const [timerState, setTimerState] = useState<TimerState>({ 
     type: "zero", referenceTimestamp: 0, time: 0,
     intervalHandle: null
   });
+  const [cpuOpponentSetting, setCpuOpponentSetting] = useState<CPUOpponentSetting>({
+    reactionTimeMean: 6,
+    reactionTimeStdDev: 1,
+    mistakeRate: 0.2
+  });
+  const [cpuOpponentClickTimeout, setCpuOpponentClickTimeout] = useState<NodeJS.Timeout | null>(null);
   const forceRerender = (judge: GameJudge): void => { 
     setJudge(judge.reconstruct());
   };
@@ -194,6 +210,12 @@ export default function GameTab({
   const playerDeckTop = middleBarBottom + canvasSpacing;
   const playerDeckBottom = playerDeckTop + deckHeight;
   const playerCollectedTop = playerDeckBottom + canvasSpacing + canvasMargin;
+  let canvasHeight = playerDeckBottom;
+  if (judge.state !== GameJudgeState.SelectingCards) {
+    canvasHeight = playerCollectedTop + cardHeight + canvasMargin;
+  } else {
+    canvasHeight = playerDeckBottom + canvasMargin;
+  }
   const cardSelectionOverlap = cardWidth * 0.3;
 
   data.characterConfigs.forEach((characterConfig, characterId) => {
@@ -234,6 +256,20 @@ export default function GameTab({
   peer.resetListener(judge.remoteEventListener.bind(judge));
   peer.notifyDisconnected = () => {
     setForceRerender({});
+  }
+  peer.notifyConnected = (peer: GamePeer) => {
+    if (isRemotePlayerOpponent && isServer) {
+      peer.sendEvent({
+        type: "syncSettings",
+        traditionalMode: judge.traditionalMode,
+        randomStartPosition: playbackSetting.randomStartPosition,
+        playbackDuration: playbackSetting.playbackDuration,
+        deckColumns: judge.deckColumns,
+        deckRows: judge.deckRows,
+      })
+      judge.resetGameState();
+      setJudge(judge.reconstruct());
+    } 
   }
   
   // region utility funcs
@@ -385,6 +421,14 @@ export default function GameTab({
       }
       case "resumeMusic": {
         notifyPlayMusic();
+        break;
+      }
+      case "syncSettings": {
+        setPlaybackSetting({
+          ...playbackSetting,
+          randomStartPosition: event.randomStartPosition,
+          playbackDuration: event.playbackDuration,
+        });
         break;
       }
     }
@@ -803,7 +847,6 @@ export default function GameTab({
         const cardInfo = judge.getDeck(deckPos.deckIndex, deckPos.cardIndex);
         if (cardInfo !== null) {
           // remove from deck
-          judge.removeFromDeck(deckPos.deckIndex, cardInfo, true);
           setJudge(judge.reconstruct());
           // start dragging
           setDragInfo({
@@ -899,6 +942,10 @@ export default function GameTab({
         }
       }
       if (deckPos !== null) {
+        // if from deck, remove first
+        if (dragInfo.dragType === "fromDeck") {
+          judge.removeFromDeck(dragInfo.dragFromDeck!.deckIndex, dragInfo.cardInfo, true);
+        }
         // check if already have, remove it first
         const already = judge.getDeck(deckPos.deckIndex, deckPos.cardIndex);
         if (already !== null) {
@@ -911,6 +958,12 @@ export default function GameTab({
         // add to deck
         judge.addToDeck(deckPos.deckIndex, dragInfo.cardInfo, deckPos.cardIndex, true);
         setJudge(judge.reconstruct());
+      } else {
+        if (dragInfo.dragType === "fromDeck") {
+          // remove from deck
+          judge.removeFromDeck(dragInfo.dragFromDeck!.deckIndex, dragInfo.cardInfo, true);
+          setJudge(judge.reconstruct());
+        }
       }
       setDragInfo(null);
     } else if (judge.state === GameJudgeState.TurnWinnerDetermined) {
@@ -1026,10 +1079,26 @@ export default function GameTab({
     setJudge(judge.reconstruct());
   }
 
+  const cpuOpponentCountdown = () => {
+    if (cpuOpponentClickTimeout !== null) {
+      clearTimeout(cpuOpponentClickTimeout);
+    }
+    const timeout = setTimeout(() => {
+      const judge = judgeRef.current;
+      if (judge.opponentType === OpponentType.CPU && judge.state === GameJudgeState.TurnStart) {
+        // try click
+      }
+    });
+    setCpuOpponentClickTimeout(timeout);
+  }
+
   const handleNextTurn = () => {
     if (judge.opponentType === OpponentType.RemotePlayer) {
       notifyPlayCountdownAudio();
       timerTextStartCountdown();
+    }
+    if (judge.opponentType === OpponentType.CPU) {
+      cpuOpponentCountdown();
     }
   }
   outerRef.current.notifyNextTurn = handleNextTurn;
@@ -1050,6 +1119,7 @@ export default function GameTab({
     setJudge(judge.reconstruct());
     setDragInfo(null);
     setHoveringCardInfo(null);
+    notifyGameEnd();
   }
   outerRef.current.notifyStopGame = handleStopGame;
 
@@ -1107,7 +1177,10 @@ export default function GameTab({
       y += buttonSize + canvasSpacing;
     }
     { // card larger button
-      const disabled = cardWidthPercentage >= cardWidthPercentageMax;
+      let disabled = cardWidthPercentage >= cardWidthPercentageMax;
+      if (x + buttonSize * 3 + canvasMargin > canvasWidth) {
+        disabled = true;
+      }
       otherElements.push(
         <GameButton 
           key="card-larger-button" 
@@ -1124,6 +1197,7 @@ export default function GameTab({
       y += buttonSize + canvasSpacing;
     }
     { // start button
+      // region start but
       const isStopGameButton = judge.state !== GameJudgeState.SelectingCards;
       let disabled = (!isStopGameButton && !canStartGame()) || (isClient && judge.clientWaitAcknowledge);
       const contained = (
@@ -1316,11 +1390,17 @@ export default function GameTab({
       );
       if (!hidden) y += buttonSize + canvasSpacing;
     }
+    if (y - canvasSpacing > canvasHeight) {
+      canvasHeight = y - canvasSpacing + canvasMargin;
+    }
   }
 
   // player deck bottom
   {
     const y = playerDeckTop + deckHeight + canvasMargin;
+    if (y + buttonSize + canvasMargin > canvasHeight) {
+      canvasHeight = y + buttonSize + canvasMargin;
+    }
     let x = deckLeft + deckWidth - buttonSize;
     { // add column button
       const hidden = judge.state !== GameJudgeState.SelectingCards;
@@ -1360,6 +1440,7 @@ export default function GameTab({
 
 
   { // middlebar
+    // region middle bar
     const middleBarShown = judge.state !== GameJudgeState.SelectingCards;
     const timerTextWidth = 150;
     const buttonSize = 47;
@@ -1422,6 +1503,7 @@ export default function GameTab({
             whiteSpace: "nowrap",
             overflow: "hidden",
             transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease",
+            userSelect: "none",
           }}
         >
           {currentCharacterId} / {musicInfo?.title}
@@ -1441,6 +1523,7 @@ export default function GameTab({
             whiteSpace: "nowrap",
             overflow: "hidden",
             transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease",
+            userSelect: "none",
           }}
         >
           {musicInfo?.album}
@@ -1449,13 +1532,18 @@ export default function GameTab({
       x = deckRight - buttonSize * 2 - canvasSpacing;
     }
     { // play/pause button
+      // region play/pause
       const isPlay = playbackState !== PlaybackState.Playing;
-      const isDisabled = playbackState === PlaybackState.CountingDown;
+      let isDisabled = playbackState === PlaybackState.CountingDown;
       const buttonY = y + middleBarHeight / 2 - buttonSize / 2;
+      if (judge.state === GameJudgeState.TurnCountdownNext) {
+        isDisabled = true;
+      }
       otherElements.push(
         <GameButton 
           key="play-pause-button"
           disabled={isDisabled}
+          hidden={!middleBarShown}
           sx={{ 
             position: "absolute", left: `${x}px`, top: `${buttonY}px`,
             opacity: middleBarShown ? 1.0 : 0.0,
@@ -1472,6 +1560,7 @@ export default function GameTab({
       x += buttonSize + canvasSpacing;
     }
     { // next turn button
+      // region next turn
       let clickable = true;
       const buttonY = y + middleBarHeight / 2 - buttonSize / 2;
       const contained = (
@@ -1494,10 +1583,14 @@ export default function GameTab({
         clickable = false;
         text = "Game Finished";
       }
+      if (judge.state === GameJudgeState.TurnCountdownNext) {
+        clickable = false;
+      }
       otherElements.push(
         <GameButton
           key="next-turn-button"
           disabled={!clickable}
+          hidden={!middleBarShown}
           text={text}
           sx={{
             position: "absolute", left: `${x}px`, top: `${buttonY}px`,
@@ -1530,6 +1623,7 @@ export default function GameTab({
               key="give-cards-instruction-text"
               variant="body1"
               sx={{
+                userSelect: "none",
                 position: "absolute",
                 left: `${deckLeft}px`,
                 top: `${playerDeckBottom + canvasMargin}px`,
@@ -1578,6 +1672,7 @@ export default function GameTab({
             <Typography 
               variant="body1"
               sx={{
+                userSelect: "none",
                 textAlign: "left",
                 height: `${textHeight}px`,
                 width: "100%",
@@ -1613,6 +1708,7 @@ export default function GameTab({
   }
 
   { // opponent deck right
+    // region op right
     const x = deckRight + canvasMargin;
     let y = opponentDeckBottom - buttonSize;
     { // traditional mode button
@@ -1650,6 +1746,7 @@ export default function GameTab({
           key="opponent-traditional-mode-explanation"
           variant="body1"
           sx={{
+            userSelect: "none",
             position: "absolute",
             left: `${deckLeft}px`,
             top: `${playerDeckBottom + canvasMargin}px`,
@@ -1735,6 +1832,196 @@ export default function GameTab({
     }
   }
 
+  { // op left
+    const x = deckLeft - canvasMargin;
+    let y = opponentDeckTop;
+    const shown = (
+      judge.state === GameJudgeState.SelectingCards &&
+      judge.opponentType === OpponentType.CPU
+    );
+    const hidden = !shown;
+    {
+      otherElements.push(
+        <Typography
+          key="opponent-deck-label"
+          variant="h6"
+          sx={{
+            userSelect: "none",
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            transform: "translateX(-100%)",
+            opacity: hidden ? 0.0 : 1.0,
+            transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
+          }}
+        >
+          CPU Opponent
+        </Typography>
+      );
+      y += 24 + canvasSpacing;
+    }
+    {
+      otherElements.push(
+        <Typography
+          key="opponent-deck-instruction"
+          variant="body1"
+          sx={{
+            userSelect: "none",
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            transform: "translateX(-100%)",
+            opacity: hidden ? 0.0 : 1.0,
+            transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
+          }}
+        >
+          Reaction Speed
+        </Typography>
+      );
+      y += 24 + canvasSpacing;
+    }
+    {
+      otherElements.push(
+        <TextField
+          key="opponent-reaction-time-input"
+          type="number"
+          size="small"
+          value={cpuOpponentSetting.reactionTimeMean}
+          label="Mean (s)"
+          disabled={hidden}
+          onChange={(e) => {
+            let val = parseFloat(e.target.value);
+            if (isNaN(val)) val = 1.0;
+            if (val < 0.5) val = 0.5;
+            if (val > 10) val = 10;
+            setCpuOpponentSetting({
+              ...cpuOpponentSetting,
+              reactionTimeMean: val,
+            });
+          }}
+          slotProps={{
+            htmlInput: {
+              min: 0.5,
+              max: 10,
+              step: 0.5,
+            }
+          }}
+          sx={{
+            width: "160px",
+            userSelect: "none",
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            opacity: hidden ? 0.0 : 1.0,
+            transform: "translateX(-100%)",
+            transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
+          }}
+        ></TextField>
+      );
+      y += 44 + canvasSpacing;
+    }
+    {
+      otherElements.push(
+        <TextField
+          key="opponent-reaction-time-stddev-input"
+          type="number"
+          size="small"
+          value={cpuOpponentSetting.reactionTimeStdDev}
+          label="Standard Deviation (s)"
+          disabled={hidden}
+          onChange={(e) => {
+            let val = parseFloat(e.target.value);
+            if (isNaN(val)) val = 0.1;
+            if (val < 0.0) val = 0.0;
+            if (val > 5) val = 5;
+            setCpuOpponentSetting({
+              ...cpuOpponentSetting,
+              reactionTimeStdDev: val,
+            });
+          }}
+          slotProps={{
+            htmlInput: {
+              min: 0.0,
+              max: 5,
+              step: 0.1,
+            }
+          }}
+          sx={{
+            width: "160px",
+            userSelect: "none",
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            opacity: hidden ? 0.0 : 1.0,
+            transform: "translateX(-100%)",
+            transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
+          }}
+        ></TextField>
+      );
+      y += 36 + canvasSpacing;
+    }
+    { 
+      otherElements.push(
+        <Typography
+          key="opponent-mistake-rate-label"
+          variant="body1"
+          sx={{
+            userSelect: "none",
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            transform: "translateX(-100%)",
+            opacity: hidden ? 0.0 : 1.0,
+            transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
+          }}
+        >
+          Mistake Rate
+        </Typography>
+      );
+      y += 24 + canvasSpacing; 
+    }
+    {
+      otherElements.push(
+        <TextField
+          key="opponent-mistake-rate-input"
+          type="number"
+          size="small"
+          value={cpuOpponentSetting.mistakeRate * 100.0}
+          label="Mistake Rate (%)"
+          disabled={hidden}
+          onChange={(e) => {
+            let val = parseFloat(e.target.value);
+            if (isNaN(val)) val = 0.0;
+            if (val < 0.0) val = 0.0;
+            if (val > 100.0) val = 100.0;
+            setCpuOpponentSetting({
+              ...cpuOpponentSetting,
+              mistakeRate: val / 100.0,
+            });
+          }}
+          slotProps={{
+            htmlInput: {
+              min: 0.0,
+              max: 100.0,
+              step: 1.0,
+            }
+          }}
+          sx={{
+            width: "160px",
+            userSelect: "none",
+            position: "absolute",
+            left: `${x}px`,
+            top: `${y}px`,
+            opacity: hidden ? 0.0 : 1.0,
+            transform: "translateX(-100%)",
+            transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
+          }}
+        ></TextField>
+      );
+      y += 44 + canvasSpacing;
+    }
+  }
+
   return (
     <Box>
       <Box
@@ -1743,7 +2030,8 @@ export default function GameTab({
           width: "100%",
           display: "flex",
           position: "relative",
-          height: "100vh",
+          height: `${canvasHeight}px`,
+          transition: "height 0.3s ease",
         }}
         onMouseDown={handleMouseDownCanvas}
         onMouseMove={handleMouseMoveCanvas}
