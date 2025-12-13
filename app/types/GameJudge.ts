@@ -257,8 +257,8 @@ class GamePeer {
     return this.dataConnection !== null;
   }
 
-  ensurePeerNotNull() {
-    if (this.peer === null) {
+  ensurePeerNotNull(forceReconstructPeer: boolean = false) {
+    if (this.peer === null || forceReconstructPeer) {
       this.peer = new Peer();
       this.peer.on("error", (err) => {
         console.error("[GamePeer] Peer error:", err);

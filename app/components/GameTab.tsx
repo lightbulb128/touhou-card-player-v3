@@ -1655,6 +1655,7 @@ export default function GameTab({
   }
 
   { // opponent connection 
+    // region op conn
     const textHeight = 16;
     if (judge.opponentType === OpponentType.RemotePlayer && !peer.hasDataConnection()) {
       otherElements.push(
@@ -1703,7 +1704,7 @@ export default function GameTab({
               sx={{ 
                 width: "100%",
               }}
-              value={isServer ? (peer.peer?.id ?? "") : remotePlayerIdInput}
+              value={isServer ? (peer.peer?.id ?? "Generating...") : remotePlayerIdInput}
               
               onChange={(e) => {
                 setRemotePlayerIdInput(e.target.value);
@@ -1717,14 +1718,42 @@ export default function GameTab({
             >
               Connect
             </Button>}
+            {isServer && <Stack
+              direction="row"
+              spacing={1}
+            >
+              <Button
+                onClick={() => {
+                  peer.ensurePeerNotNull(true);
+                }}
+                variant="outlined"
+                color="secondary"
+              >
+                {(peer.peer?.id === null || peer.peer?.id === undefined)
+                  ? "Retry"
+                  : "Regenerate"}
+              </Button>
+              <Button
+                onClick={() => {
+                  // copy to clipboard
+                  if (peer.peer?.id) {
+                    navigator.clipboard.writeText(peer.peer.id);
+                  }
+                }}
+                disabled={peer.peer?.id === null || peer.peer?.id === undefined}
+                variant="outlined"
+              >
+                Copy to Clipboard
+              </Button>
+            </Stack>}
           </Stack>
         </Paper>
       );
     }
   }
 
-  { // opponent deck right
-    // region op right
+  { // opponent deck left
+    // region op left
     const x = deckRight + canvasMargin;
     let y = opponentDeckBottom - buttonSize;
     { // traditional mode button

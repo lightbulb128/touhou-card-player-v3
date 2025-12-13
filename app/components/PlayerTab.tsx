@@ -233,7 +233,7 @@ export default function PlayerTab({
         ></PlayerControl>
         <Stack direction="column" spacing={1} width="100%">
           <Typography variant="body1" color="text.secondary">
-            Upcoming
+            Upcoming (click to disable)
           </Typography>
           <Stack direction="row" spacing={0}
             sx={{
@@ -246,58 +246,59 @@ export default function PlayerTab({
             {upcomingCards}
           </Stack>
         </Stack>
-        <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
-          <Button variant="outlined" sx={{ width: "8rem" }} color="secondary" onClick={() => {
-            regeneratePlayingOrder(true);
-          }}>Shuffle</Button>
-          <Button variant="outlined" sx={{ width: "8rem" }} color="secondary" onClick={() => {
-            regeneratePlayingOrder(false);
-          }}>Sort</Button>
+        <Stack direction="column" spacing={1} width="100%">
+          <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
+            <Button variant="outlined" sx={{ width: "8rem" }} color="secondary" onClick={() => {
+              regeneratePlayingOrder(true);
+            }}>Shuffle</Button>
+            <Button variant="outlined" sx={{ width: "8rem" }} color="secondary" onClick={() => {
+              regeneratePlayingOrder(false);
+            }}>Sort</Button>
+          </Stack>
+          <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
+            <Button 
+              variant={playbackSetting.randomStartPosition ? "contained" : "outlined"}
+              sx={{ width: "8rem" }} 
+              onClick={() => {
+                setPlaybackSetting({
+                  ...playbackSetting,
+                  randomStartPosition: !playbackSetting.randomStartPosition,
+                });
+              }}
+            >Random start</Button>
+            <Button 
+              variant={playbackSetting.countdown ? "contained" : "outlined"}
+              sx={{ width: "8rem" }} 
+              onClick={() => {
+                setPlaybackSetting({
+                  ...playbackSetting,
+                  countdown: !playbackSetting.countdown,
+                });
+              }}
+            >Countdown</Button>
+          </Stack>
+          <Stack direction="row" paddingTop={1} spacing={1} width="100%" alignItems="center" justifyContent="center">
+            <TextField
+              label="Playback Duration (s; 0 = infinite)"
+              value={playbackDurationString}
+              onChange={(e) => setPlaybackDurationString(e.target.value)}
+              sx={{ width: "16rem" }}
+              size="small"
+              type="number"
+              onBlur={() => {
+                let duration = parseInt(playbackDurationString);
+                if (isNaN(duration) || duration < 0) {
+                  duration = 0;
+                }
+                setPlaybackDurationString(duration.toString());
+                setPlaybackSetting({
+                  ...playbackSetting,
+                  playbackDuration: duration,
+                });
+              }}
+            />
+          </Stack>
         </Stack>
-        <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
-          <Button 
-            variant={playbackSetting.randomStartPosition ? "contained" : "outlined"}
-            sx={{ width: "8rem" }} 
-            onClick={() => {
-              setPlaybackSetting({
-                ...playbackSetting,
-                randomStartPosition: !playbackSetting.randomStartPosition,
-              });
-            }}
-          >Random start</Button>
-          <Button 
-            variant={playbackSetting.countdown ? "contained" : "outlined"}
-            sx={{ width: "8rem" }} 
-            onClick={() => {
-              setPlaybackSetting({
-                ...playbackSetting,
-                countdown: !playbackSetting.countdown,
-              });
-            }}
-          >Countdown</Button>
-        </Stack>
-        <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
-          <TextField
-            label="Playback Duration (seconds)"
-            value={playbackDurationString}
-            onChange={(e) => setPlaybackDurationString(e.target.value)}
-            sx={{ width: "16rem" }}
-            size="small"
-            type="number"
-            onBlur={() => {
-              let duration = parseInt(playbackDurationString);
-              if (isNaN(duration) || duration < 0) {
-                duration = 0;
-              }
-              setPlaybackDurationString(duration.toString());
-              setPlaybackSetting({
-                ...playbackSetting,
-                playbackDuration: duration,
-              });
-            }}
-          />
-        </Stack>
-
       </Stack>
     </div>
   )

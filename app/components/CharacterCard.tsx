@@ -3,6 +3,11 @@ import { CharacterId, GlobalData, CardAspectRatio } from "../types/Configs";
 
 const CardCollectionPrefix: Map<string, string> = new Map([
 	["dairi-sd", "https://r2bucket-touhou.hgjertkljw.org/cards/"],
+	["dairi", "https://r2bucket-touhou.hgjertkljw.org/cards-dairi/"],
+	["enbu", "https://r2bucket-touhou.hgjertkljw.org/cards-enbu/"],
+	["enbu-dolls", "https://r2bucket-touhou.hgjertkljw.org/cards-enbu-dolls/"],
+	["thbwiki-sd", "https://r2bucket-touhou.hgjertkljw.org/cards-thwiki/"],
+	["zun", "https://r2bucket-touhou.hgjertkljw.org/cards-zun/"],
 ]);
 
 export enum CardBackgroundState {
@@ -19,7 +24,7 @@ export enum CardBackgroundState {
 export interface CharacterCardProps {
 	cardCollection: string;
 	imageSource: string;
-	backgroundState: CardBackgroundState;
+	backgroundState?: CardBackgroundState;
 	raised?: boolean;
 	raiseDirection?: "up" | "down";
 	onClick?: () => void;
@@ -39,7 +44,9 @@ export function CharacterCard({
 	paperElevation, paperVariant,
 	...props
 }: CharacterCardProps) {
-
+	if (backgroundState === undefined) {
+		backgroundState = CardBackgroundState.Normal;
+	}
 	if (raised === undefined) {
 		raised = false;
 	}

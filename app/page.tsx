@@ -15,6 +15,8 @@ import CreateTheme from "./components/Theme";
 import CustomTabs from "./components/CustomTabs";
 import ListTab from "./components/ListTab";
 import GameTab from "./components/GameTab";
+import ConfigTab from "./components/ConfigTab";
+import { DefaultMusicSource } from "./types/Consts";
 
 function TabContainer({
   children
@@ -129,7 +131,7 @@ export default function Home() {
 
       const [characters, sources, presets] = await Promise.all([
         fetchJson("/character.json"),
-        fetchJson("/sources.json"),
+        fetchJson(DefaultMusicSource.url),
         fetchJson("/idpresets.json"),
       ]);
 
@@ -458,7 +460,14 @@ export default function Home() {
                 onPause={handlePause}
               ></ListTab>
             </TabContainer>,
-            <TabContainer>Configs</TabContainer>,
+            <TabContainer>
+              <ConfigTab
+                data={globalData}
+                musicSelection={musicSelection}
+                setGlobalData={setGlobalData}
+                setMusicSelection={setMusicSelection}
+              ></ConfigTab>
+            </TabContainer>,
             <TabContainer>
               <GameTab
                 data={globalData}

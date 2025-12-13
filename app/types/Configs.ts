@@ -25,6 +25,16 @@ class GlobalData {
   presets: MusicPresets;
   cardCollection: string;
 
+  reconstruct() {
+    const r = new GlobalData();
+    r.characterConfigs = this.characterConfigs;
+    r.sources = this.sources;
+    r.cardSourcePrefix = this.cardSourcePrefix;
+    r.presets = this.presets;
+    r.cardCollection = this.cardCollection;
+    return r;
+  }
+
   constructor() {
     this.characterConfigs = new Map();
     this.sources = new Map();
