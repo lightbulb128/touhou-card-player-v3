@@ -427,8 +427,8 @@ class GameJudge {
     this.turnWinner = null;
     this.countdownTimeout = null;
     this.outerRef = outerRef;
-    this.deckRows = 1;
-    this.deckColumns = 6;
+    this.deckRows = 3;
+    this.deckColumns = 8;
     this.deck = [[], []];
     for (let i = 0; i < this.deckRows * this.deckColumns; i++) {
       this.deck[Alice].push(new CardInfo(null, 0));
