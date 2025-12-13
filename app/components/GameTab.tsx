@@ -484,6 +484,23 @@ export default function GameTab({
   }, []);
 
   useEffect(() => {
+    const inPlayingOrder = new Set<CharacterId>(playingOrder);
+    playingOrder.forEach((charId) => {
+      inPlayingOrder.add(charId);
+    });
+    // for all card in decks, check if in playing order.
+    // if not, remove from deck.
+    const deckChanged = false;
+    judge.deck.forEach((deck, deckIndex) => {
+      deck.forEach((cardInfo, cardIndex) => {
+        if (cardInfo.characterId !== null && !inPlayingOrder.has(cardInfo.characterId)) {
+          judge.removeFromDeck(deckIndex as 0 | 1, cardInfo, true);
+        }
+      });
+    });
+  }, [playingOrder]);
+
+  useEffect(() => {
     outerRef.current.globalData = data;
     outerRef.current.playingOrder = playingOrder;
     outerRef.current.characterTemporaryDisabled = characterTemporaryDisabled;

@@ -464,8 +464,12 @@ export default function Home() {
               <ConfigTab
                 data={globalData}
                 musicSelection={musicSelection}
+                playingOrder={playingOrder}
+                currentCharacterId={currentCharacterId}
                 setGlobalData={setGlobalData}
                 setMusicSelection={setMusicSelection}
+                setPlayingOrder={setPlayingOrder}
+                setCurrentCharacterId={setCurrentCharacterId}
               ></ConfigTab>
             </TabContainer>,
             <TabContainer>

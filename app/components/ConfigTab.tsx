@@ -1,10 +1,15 @@
 import { Box, Button, Collapse, Divider, Grid, IconButton, Paper, Stack, Typography } from "@mui/material";
-import { AddRounded, RemoveRounded } from "@mui/icons-material";
-import { GlobalData, MusicSelectionMap } from "../types/Configs";
+import { AddRounded, RemoveRounded, Task } from "@mui/icons-material";
+import { CharacterId, getMusicInfo, GlobalData, MusicSelectionMap } from "../types/Configs";
 import { Dispatch, useState } from "react";
 import { CardCollections, DefaultMusicSource, MusicSources } from "../types/Consts";
 import { CharacterCard } from "./CharacterCard";
 import { PagePRNG } from "../types/PagePrng";
+import { 
+  CheckBoxOutlineBlank as NoneIcon, 
+  IndeterminateCheckBox as PartialIcon, 
+  CheckBox as FullIcon 
+} from "@mui/icons-material";
 
 interface ConfigDrawerProps {
   title: string;
@@ -68,14 +73,19 @@ export interface ConfigTabProps {
   
   data: GlobalData,
   musicSelection: MusicSelectionMap,
+  playingOrder: Array<CharacterId>,
+  currentCharacterId: CharacterId,
   
   setGlobalData: Dispatch<React.SetStateAction<GlobalData>>,
   setMusicSelection: (selection: MusicSelectionMap) => void,
+  setPlayingOrder: (order: Array<CharacterId>) => void,
+  setCurrentCharacterId: (charId: CharacterId) => void,
 
 }
 
 export default function ConfigTab(props: ConfigTabProps) {
   const [musicSourceKey, setMusicSourceKey] = useState(DefaultMusicSource.key);
+  const [focusedPreset, setFocusedPreset] = useState<string | null>(null);
   const prng = new PagePRNG();
   const cardExampleSources: string[] = [];
   const sourcePool = new Array<string>();
@@ -88,6 +98,70 @@ export default function ConfigTab(props: ConfigTabProps) {
     const index = prng.next() % sourcePool.length;
     cardExampleSources.push(sourcePool[index]);
   }
+  const presets: Map<string, MusicSelectionMap> = new Map();
+  // add presets from default and tags
+  { // default
+    const selectionMap: MusicSelectionMap = new Map();
+    props.data.characterConfigs.forEach((config, charId) => {
+      selectionMap.set(charId, 0);
+    });
+    presets.set("Default", selectionMap);
+  }
+  { // already
+    props.data.presets.forEach((selectionMap, name) => {
+      presets.set(name, selectionMap);
+    });
+  } 
+  { // tags
+    const tagsSet: Set<string> = new Set();
+    props.data.characterConfigs.forEach((config) => {
+      config.tags.forEach((tag) => {
+        tagsSet.add(tag);
+      });
+    });
+    tagsSet.forEach((tag) => {
+      const selectionMap: MusicSelectionMap = new Map();
+      props.data.characterConfigs.forEach((config, charId) => {
+        if (config.tags.includes(tag)) {
+          selectionMap.set(charId, -1);
+        }
+      });
+      presets.set(`Disable ${tag}`, selectionMap);
+    }); 
+  }
+
+  const applyMusicSelectionPreset = (selectionMap: MusicSelectionMap) => {
+    const newMusicSelection: MusicSelectionMap = new Map(props.musicSelection);
+    selectionMap.forEach((musicId, charId) => {
+      newMusicSelection.set(charId, musicId);
+    });
+
+    // update playingorder if something is set to -1
+    let changed = false;
+    const newPlayingOrder = props.playingOrder.filter((charId) => {
+      if (newMusicSelection.has(charId) && newMusicSelection.get(charId) === -1) {
+        changed = true;
+        return false;
+      }
+      return true;
+    });
+    // if something is not -1 but not in playing order, add to the end
+    selectionMap.forEach((musicId, charId) => {
+      if (musicId !== -1 && !newPlayingOrder.includes(charId)) {
+        newPlayingOrder.push(charId);
+        changed = true;
+      }
+    });
+    props.setMusicSelection(newMusicSelection);
+    if (changed) {
+      props.setPlayingOrder(newPlayingOrder);
+    }
+    // if currentPlayingCharacter is disabled, set to ""
+    if (newMusicSelection.has(props.currentCharacterId) && newMusicSelection.get(props.currentCharacterId) === -1) {
+      props.setCurrentCharacterId("");
+    }
+  }
+
   return (
     <Box
       sx={{width: "100%", display: "flex", justifyContent: "center"}}
@@ -113,7 +187,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                   {index !== 0 && <Divider />}
                   <Grid container spacing={1} width="100%">
                     <Grid size={8} sx={{display: "flex", alignItems: "center"}}>
-                      <Typography variant="subtitle1" fontWeight="bold">
+                      <Typography variant="body1">
                         {key}
                       </Typography>
                     </Grid>
@@ -131,7 +205,9 @@ export default function ConfigTab(props: ConfigTabProps) {
                       </Button>
                     </Grid>
                     <Grid size={6}>
-                      {element}
+                      <Typography variant="body2" color="textSecondary">
+                        {element}
+                      </Typography>
                     </Grid>
                     <Grid size={6}>
                       <Stack direction="row" spacing={1} justifyContent="space-between" padding={1}>
@@ -163,7 +239,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                   {index !== 0 && <Divider />}
                   <Grid container spacing={1} width="100%">
                     <Grid size={8} sx={{display: "flex", alignItems: "center"}}>
-                      <Typography variant="subtitle1" fontWeight="bold">
+                      <Typography variant="body1">
                         {key}
                       </Typography>
                     </Grid>
@@ -188,11 +264,94 @@ export default function ConfigTab(props: ConfigTabProps) {
                       </Button>
                     </Grid>
                     <Grid size={12}>
-                      <Typography variant="body2">
+                      <Typography variant="body2" color="textSecondary">
                         {description}
                       </Typography>
                     </Grid>
                   </Grid>
+                </Stack>
+              );
+            })}
+          </Stack>
+        </ConfigDrawer>
+        <ConfigDrawer title="Music Selection Presets">
+          <Stack direction="column" spacing={1}
+            sx={{width: "100%"}}
+          >
+            {Array.from(presets).map(([name, selectionMap], index) => {
+              let fullyApplied = true;
+              let partiallyApplied = false;
+              const checks = new Map<CharacterId, boolean>();
+              for (const [charId, musicId] of Array.from(selectionMap)) {
+                checks.set(charId, props.musicSelection.get(charId) === musicId);
+                if (props.musicSelection.get(charId) !== musicId) {
+                  fullyApplied = false;
+                } else {
+                  partiallyApplied = true;
+                }
+              }
+              console.log({name, fullyApplied, partiallyApplied, checks});
+              const icon = fullyApplied ? <FullIcon fontSize="small"/> : (partiallyApplied ? <PartialIcon fontSize="small"/> : <NoneIcon fontSize="small"/>);
+              const setFocused = () => {
+                if (focusedPreset === name) {
+                  setFocusedPreset(null);
+                } else {
+                  setFocusedPreset(name);
+                }
+              }
+              return (
+                <Stack direction="column" width="100%" key={name} spacing={0} onClick={setFocused}>
+                  <Grid container width="100%" >
+                    <Grid size={8} sx={{display: "flex", alignItems: "center"}}>
+                      <Typography variant="body1" sx={{display: "flex", alignItems: "center", gap: 0.5}}>
+                        {icon}
+                        {name}
+                      </Typography>
+                    </Grid>
+                    <Grid size={4} sx={{display: "flex", justifyContent: "flex-end", alignItems: "center"}}>
+                      <Button
+                        size="small"
+                        disabled={fullyApplied}
+                        variant={"outlined"}
+                        onClick={() => {
+                          applyMusicSelectionPreset(selectionMap);
+                        }}
+                        sx={{
+                          height: "2em"
+                        }}
+                      >
+                        Apply
+                      </Button>
+                    </Grid>
+                  </Grid>
+                  <Collapse in={focusedPreset === name}>
+                    <Stack direction="column" spacing={0} paddingLeft={3}>
+                      {Array.from(selectionMap).map(([charId, musicId]) => {
+                        const applied = props.musicSelection.get(charId) === musicId;
+                        const icon = applied ? <FullIcon fontSize="small"/> : <NoneIcon fontSize="small"/>;
+                        let musicName = "Disabled";
+                        if (musicId != -1) {
+                          const nameId = props.data.characterConfigs.get(charId)?.musics[musicId];
+                          if (nameId) {
+                            const musicInfo = getMusicInfo(nameId);
+                            if (musicInfo) {
+                              musicName = musicInfo.title;
+                            }
+                          }
+                        }
+                        return (
+                          <Stack direction="row" spacing={1} key={name + charId} alignItems="center">
+                            <Typography variant="body2" color="textSecondary" fontSize="small">
+                              {icon}
+                            </Typography>
+                            <Typography variant="body2" color="textSecondary">
+                              {charId} {"⇒"} {musicName}
+                            </Typography>
+                          </Stack>
+                        );
+                      })}
+                    </Stack>
+                  </Collapse>
                 </Stack>
               );
             })}
