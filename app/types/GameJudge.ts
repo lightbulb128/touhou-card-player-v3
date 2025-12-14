@@ -136,6 +136,16 @@ type EventSyncStart = {
   rngSeed: number;
 }
 
+
+type EventRequestSyncData = {
+  type: "requestSyncData";
+};
+
+type EventSyncData = {  
+  type: "syncData";
+  data: SyncData;
+};
+
 type EventSyncNextTurn = {
   type: "syncNextTurn";
   data: SyncData;
@@ -218,7 +228,7 @@ type Event = (
   EventSyncWinnerDetermined | EventSyncStart | EventSyncNextTurn |
   EventStopGame | EventSwitchTraditionalMode | EventPauseMusic | EventResumeMusic |
   EventGive | EventSyncSettings | EventFilterMusicByDeck |
-  EventNotifyName
+  EventNotifyName | EventRequestSyncData | EventSyncData
 ); 
 
 class GamePeer {
@@ -567,6 +577,22 @@ class GameJudge {
   }
 
   addToDeck(player: Player, cardInfo: CardInfo, toIndex: number | null, send: boolean): boolean {
+    // check if the card is already in deck
+    for (const player of [Alice, Bob]) {
+      for (const existingCardInfo of this.deck[player]) {
+        if (existingCardInfo.equals(cardInfo)) {
+          return false;
+        }
+      }
+    }
+    // check if the card is already in collected
+    for (const player of [Alice, Bob]) {
+      for (const existingCardInfo of this.collectedCards[player]) {
+        if (existingCardInfo.equals(cardInfo)) {
+          return false;
+        }
+      }
+    }
     // if toIndex is null, add to first empty slot
     if (toIndex === null) {
       for (let i = 0; i < this.deck[player].length; i++) {
@@ -1293,6 +1319,23 @@ class GameJudge {
         e.cardInfo = new CardInfo(e.cardInfo.characterId, e.cardInfo.cardIndex);
         const result = this.addToDeck(cRole(e.deckPosition.deckIndex), e.cardInfo, e.deckPosition.cardIndex, false);
         if (result) { this.g().refresh(this); }
+        else {
+          if (this.hasRemotePlayer()) {
+            if (this.isServer) {
+              // if server, send self data to client
+              const syncData = this.buildSyncData();
+              this.g().peer.sendEvent({
+                type: "syncData",
+                data: syncData,
+              });
+            } else {
+              // request server to send sync data
+              this.g().peer.sendEvent({
+                type: "requestSyncData",
+              });
+            }
+          }
+        }
         break;
       }
       case "removeCard": {
@@ -1300,6 +1343,23 @@ class GameJudge {
         e.cardInfo = new CardInfo(e.cardInfo.characterId, e.cardInfo.cardIndex);
         const result = this.removeFromDeck(cRole(e.deckPosition.deckIndex), e.cardInfo, false);
         if (result) { this.g().refresh(this); }
+        else {
+          if (this.hasRemotePlayer()) {
+            if (this.isServer) {
+              // if server, send self data to client
+              const syncData = this.buildSyncData();
+              this.g().peer.sendEvent({
+                type: "syncData",
+                data: syncData,
+              });
+            } else {
+              // request server to send sync data
+              this.g().peer.sendEvent({
+                type: "requestSyncData",
+              });
+            }
+          }
+        }
         break;
       }
       case "adjustDeckSize": {
@@ -1339,8 +1399,8 @@ class GameJudge {
         this.g().refresh(this);
         break;
       }
-      case "syncWinnerDetermined": case "syncStart": case "syncNextTurn": {
-        let e: EventSyncWinnerDetermined | EventSyncStart | EventSyncNextTurn;
+      case "syncWinnerDetermined": case "syncStart": case "syncNextTurn": case "syncData": {
+        let e: EventSyncWinnerDetermined | EventSyncStart | EventSyncNextTurn | EventSyncData;
         if (event.type === "syncWinnerDetermined") {
           e = event as EventSyncWinnerDetermined;
         } else if (event.type === "syncStart") {
@@ -1353,10 +1413,12 @@ class GameJudge {
             playbackDuration: e.playbackDuration,
           })
           this.g().setNextSongPRNGSeed(e.rngSeed);
-        } else {
+        } else if (event.type === "syncNextTurn") {
           this.clientWaitAcknowledge = false;
           e = event as EventSyncNextTurn;
           this.g().setNextSongPRNGSeed(e.rngSeed);
+        } else {
+          e = event as EventSyncData;
         }
         // reverse the sync data
         const data = reverseSyncData(e.data);
