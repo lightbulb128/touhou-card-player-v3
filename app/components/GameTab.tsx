@@ -17,7 +17,8 @@ import {
   StopRounded, GroupsRounded, SmartToyRounded, PersonOffRounded,
   AddRounded, RemoveRounded, Casino, ClearRounded, ShuffleRounded,
   ClassRounded, StarRounded, FilterList,
-  VolumeDownRounded as VolumeDown, VolumeUpRounded as VolumeUp
+  VolumeDownRounded as VolumeDown, VolumeUpRounded as VolumeUp,
+  Pending,
 } from "@mui/icons-material";
 import { GameButton } from "./GameTabControls";
 import { MonospaceFontFamily, NoFontFamily } from "./Theme";
@@ -1343,7 +1344,7 @@ export default function GameTab({
           key="start-button"
           text={text}
           disabled={disabled}
-          color={!isGameFinished ? "primary" : "secondary"}
+          color={!isGameFinished ? (contained ? "info" : "primary") : "secondary"}
           onClick={isStopGameButton ? handleStopGameButtonClick : handleStartGameButtonClick}
           sx={{ 
             position: "absolute", left: `${x}px`, top: `${y}px`, 
@@ -1690,6 +1691,7 @@ export default function GameTab({
         isRemotePlayerOpponent &&
         judge.confirmations.next.one()
       );
+      let icon = "skip"
       let text = "";
       if (contained) {
         if (judge.confirmations.next.ok[1]) {
@@ -1704,10 +1706,20 @@ export default function GameTab({
           ["givesLeft", judge.givesLeft.toString()],
           ["plural", judge.givesLeft > 1 ? "s" : ""],
         ]));
+        icon = "shuffle";
+      }
+      if (judge.state === GameJudgeState.TurnWinnerDetermined && judge.givesLeft < 0 && judge.hasRemotePlayer()) {
+        text = GetLocalizedString(Localization.GameNextTurnReceiveCards, new Map<string, string>([
+          ["receives", (-judge.givesLeft).toString()],
+          ["plural", -judge.givesLeft > 1 ? "s" : ""],
+        ]));
+        clickable = false;
+        icon = "pending";
       }
       if (judge.isGameFinished()) {
         clickable = false;
         text = GetLocalizedString(Localization.GameNextTurnGameFinished);
+        icon = "finished";
       }
       if (judge.state === GameJudgeState.TurnCountdownNext) {
         clickable = false;
@@ -1725,11 +1737,24 @@ export default function GameTab({
           }}
           onClick={handleNextTurnButtonClick}
           contained={contained}
+          color={contained ? "info" : "primary"}
         >
-          <SkipNextRounded 
+          {icon === "skip" && <SkipNextRounded 
             fontSize="large"
             htmlColor={(contained && clickable) ? "white" : "inherit"}
-          ></SkipNextRounded>
+          ></SkipNextRounded>}
+          {icon === "pending" && <Pending 
+            fontSize="large"
+            htmlColor={(contained && clickable) ? "white" : "inherit"}
+          ></Pending>}
+          {icon === "finished" && <StopRounded
+            fontSize="large"
+            htmlColor={(contained && clickable) ? "white" : "inherit"}
+          ></StopRounded>}
+          {icon === "shuffle" && <ShuffleRounded
+            fontSize="large"
+            htmlColor={(contained && clickable) ? "white" : "inherit"}
+          ></ShuffleRounded>}
         </GameButton>
       );
       if (judge.givesLeft != 0) {

@@ -70,11 +70,11 @@ export function GameButton({
             props.disabled ? `1px solid ${theme.palette.action.disabled}` : "1px solid"
           ) : "none",
           backgroundColor: props.contained ? (
-            props.disabled ? "action.disabled" : "primary.main"
+            props.disabled ? "action.disabled" : (props.color || "primary") + ".main"
           ) : "transparent",
           "&:hover": {
             backgroundColor: props.contained ? (
-              props.disabled ? "action.disabled" : "primary.dark"
+              props.disabled ? "action.disabled" : (props.color || "primary") + ".dark"
             ) : "action.hover",
           },
         }}

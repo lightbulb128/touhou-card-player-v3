@@ -64,7 +64,8 @@ const Localization = {
   GameNextTurnOpponentWaiting: u("opponent waiting...", "对手等待中..."),
   GameNextTurnWaitingForOpponent: u("waiting for opponent...", "等待对手..."),
   GameNextTurnGameFinished: u("game finished", "游戏已结束"),
-  GameNextTurnGiveCards: u("Give {givesLeft} card{plural}", "交出 {givesLeft} 张卡牌"),
+  GameNextTurnGiveCards: u("give {givesLeft} card{plural}...", "交出 {givesLeft} 张卡牌"),
+  GameNextTurnReceiveCards: u("receiving {receives} card{plural}...", "等待接收 {receives} 张卡牌"),
 
   GameInstructionGiveCards: u(
     "Give {givesLeft} card{plural} to opponent, or directly click next turn to give randomly.",

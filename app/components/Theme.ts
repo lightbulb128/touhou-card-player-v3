@@ -67,7 +67,8 @@ export default function CreateTheme() {
         secondary: themeColors.muted,
       },
       divider: themeColors.divider,
-      success: { main: "#ffff83ff",}
+      success: { main: "#ffff83ff",},
+      info: { main: "#00cb36ff",},
     },
     // shape: { borderRadius: 14 },
     typography: {
