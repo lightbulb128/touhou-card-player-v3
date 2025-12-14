@@ -34,6 +34,7 @@ export interface GameTabProps {
   playbackState: PlaybackState,
   playbackSetting: PlaybackSetting,
   volume: number;
+  musicStartTimestamp: number;
   notifyGameStart: (order: Array<CharacterId> | null) => Array<CharacterId>;
   notifyGameEnd: () => void;
   notifyPauseMusic: () => void;
@@ -111,6 +112,7 @@ export default function GameTab({
   playbackState,
   playbackSetting,
   volume,
+  musicStartTimestamp,
   notifyGameStart,
   notifyGameEnd,
   notifyPauseMusic,
@@ -263,7 +265,12 @@ export default function GameTab({
 
   peer.resetListener(judge.remoteEventListener.bind(judge));
   peer.notifyDisconnected = () => {
-    setForceRerender({});
+    judge.state = GameJudgeState.SelectingCards;
+    judge.stopGame();
+    setJudge(judge.reconstruct());
+    setDragInfo(null);
+    setHoveringCardInfo(null);
+    notifyGameEnd();
   }
   peer.notifyConnected = (peer: GamePeer) => {
     if (isRemotePlayerOpponent && isServer) {
@@ -578,6 +585,10 @@ export default function GameTab({
       setJudge(judge => judge.reconstruct());
     }
   }, [])
+
+  useEffect(() => {
+    judge.turnStartTimestamp = musicStartTimestamp;
+  }, [musicStartTimestamp]);
   
   // calculate anchor positions
   const toDeckCardPosition = (deckIndex: 0 | 1, cardIndex: number): Position => {

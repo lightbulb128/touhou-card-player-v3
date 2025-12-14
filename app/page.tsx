@@ -66,6 +66,7 @@ export default function Home() {
   const [volume, setVolume] = useState<number>(1.0);
   const nextSongPRNGSeedRef = useRef<number>(Math.floor(Math.random() * 2147483647));
   const isOnSmallerScreen = windowWidth < 600;
+  const [musicStartTimestamp, setMusicStartTimestamp] = useState<number>(0);
 
   // region utility funcs
   const getMusicId = (character: CharacterId): MusicUniqueId | null => {
@@ -126,7 +127,6 @@ export default function Home() {
 
   const saveToLocalStorage = () => {
     if (!globalDataLoadedFlag) { return; }
-    console.log("Saving to local storage...");
     // save music selection
     const selectionObj: { [key: string]: number } = {};
     musicSelection.forEach((value, key) => {
@@ -347,9 +347,22 @@ export default function Home() {
       if (playbackSetting.randomStartPosition) {
         setRandomPlaybackPosition();
       }
-      audioElementRef.current.play();
-      resetPauseTimeout();
-      setPlaybackState(PlaybackState.Playing);
+      if (audioElementRef.current) {
+        // check if the music is already played
+        let playedDuration = 0;
+        const ranges = audioElementRef.current.played;
+        for (let i = 0; i < ranges.length; i++) {
+          playedDuration += ranges.end(i) - ranges.start(i);
+        }
+        audioElementRef.current.play().then(() => {
+          if (playedDuration < 0.02) {
+            console.log("CountdownEnd: Music started at ", Date.now());
+            setMusicStartTimestamp(Date.now());
+          }
+        });
+        resetPauseTimeout();
+        setPlaybackState(PlaybackState.Playing);
+      }
     }
   }
 
@@ -399,7 +412,10 @@ export default function Home() {
       if (playbackSetting.randomStartPosition) {
         setRandomPlaybackPosition();
       }
-      audioElementRef.current.play();
+      audioElementRef.current.play().then(() => {
+        console.log("Audio loaded: Music started at ", Date.now());
+        setMusicStartTimestamp(Date.now());
+      });
       resetPauseTimeout();
       setPlaybackState(PlaybackState.Playing);
     }
@@ -683,6 +699,7 @@ export default function Home() {
                 playbackState={playbackState}
                 playbackSetting={playbackSetting}
                 volume={volume}
+                musicStartTimestamp={musicStartTimestamp}
                 notifyGameStart={handleGameStart}
                 notifyGameEnd={handleGameEnd}
                 notifyPlayCountdownAudio={playCountdownAudio}
