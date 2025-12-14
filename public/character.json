@@ -1,22 +1,4 @@
 {
-    "博麗霊夢": {
-        "card": "霊夢.png",
-        "music": [
-            "東方永夜抄 ～ Imperishable Night/上海アリス幻樂団 - 少女綺想曲　～ Dream Battle.mp3",
-            "東方花映塚 ～ Phantasmagoria of Flower View/上海アリス幻樂団 - 春色小径　～ Colorful Path.mp3",
-            "東方獣王園 ～ Unfinished Dream of All Living Ghost/上海アリス幻樂団 - 世界は可愛く出来ている.mp3",
-            "幻想曲抜萃 ～ 東方萃夢想/DayDisc/02. 東方妖恋談.mp3",
-            "幻想曲抜萃 ～ 東方萃夢想/NightDisc/02. 少女綺想曲 ～ Capriccio.mp3",
-            "全人類ノ天楽録 ～ 東方緋想天/ArrangeDisc/02. 東方妖恋談.mp3",
-            "核熱造神ヒソウテンソク ～ 東方非想天則/10. 二色蓮花蝶 ～ Ancients.mp3",
-            "暗黒能楽集・心綺楼/黄昏フロンティア・上海アリス幻樂団 - 春色小径　～ Colorful Path.mp3",
-            "深秘的楽曲集/黄昏フロンティア・上海アリス幻樂団 - 二色蓮花蝶 ～ Red and White.mp3",
-            "完全憑依ディスコグラフィ/あきやまうに - 地の色は黄色　～ Primrose.mp3",
-            "強欲な獣のムジカ/黄昏フロンティア - 少女綺想曲.mp3"
-        ],
-        "searchNames": ["博麗霊夢", "Hakurei Reimu", "博丽灵梦", "boli lingmeng"],
-        "tags": ["主人公"]
-    },
     "霧雨魔理沙": {
         "card": "魔理沙.png",
         "music": [
@@ -33,6 +15,38 @@
             "強欲な獣のムジカ/黄昏フロンティア - 恋色マスタースパーク.mp3"
         ],
         "searchNames": ["霧雨魔理沙", "Kirisame Marisa", "雾雨魔理沙", "wuyu molisha"],
+        "tags": ["主人公"]
+    },
+    "アリス・マーガトロイド": {
+        "card": "アリス＆上海蓬莱.png",
+        "music": [
+            "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - 人形裁判　～ 人の形弄びし少女.mp3",
+            "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - ブクレシュティの人形師.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/DayDisc/08. ブクレシュティの人形師.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/NightDisc/08. 人形裁判.mp3",
+            "全人類ノ天楽録 ～ 東方緋想天/ArrangeDisc/05. ブクレシュティの人形師.mp3",
+            "核熱造神ヒソウテンソク ～ 東方非想天則/12. the Grimoire of Alice.mp3",
+            "夢違科学世紀 ～ Changeability of Strange Dream/08. 人形裁判 ～ 人の形弄びし少女.mp3"
+        ],
+        "searchNames": ["アリス・マーガトロイド", "Arisu Magatoroido", "Alice Margatroid", "爱丽丝·玛格特罗依德", "ailisi mageteluoyide"],
+        "tags": ["妖々夢"]
+    },
+    "博麗霊夢": {
+        "card": "霊夢.png",
+        "music": [
+            "東方永夜抄 ～ Imperishable Night/上海アリス幻樂団 - 少女綺想曲　～ Dream Battle.mp3",
+            "東方花映塚 ～ Phantasmagoria of Flower View/上海アリス幻樂団 - 春色小径　～ Colorful Path.mp3",
+            "東方獣王園 ～ Unfinished Dream of All Living Ghost/上海アリス幻樂団 - 世界は可愛く出来ている.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/DayDisc/02. 東方妖恋談.mp3",
+            "幻想曲抜萃 ～ 東方萃夢想/NightDisc/02. 少女綺想曲 ～ Capriccio.mp3",
+            "全人類ノ天楽録 ～ 東方緋想天/ArrangeDisc/02. 東方妖恋談.mp3",
+            "核熱造神ヒソウテンソク ～ 東方非想天則/10. 二色蓮花蝶 ～ Ancients.mp3",
+            "暗黒能楽集・心綺楼/黄昏フロンティア・上海アリス幻樂団 - 春色小径　～ Colorful Path.mp3",
+            "深秘的楽曲集/黄昏フロンティア・上海アリス幻樂団 - 二色蓮花蝶 ～ Red and White.mp3",
+            "完全憑依ディスコグラフィ/あきやまうに - 地の色は黄色　～ Primrose.mp3",
+            "強欲な獣のムジカ/黄昏フロンティア - 少女綺想曲.mp3"
+        ],
+        "searchNames": ["博麗霊夢", "Hakurei Reimu", "博丽灵梦", "boli lingmeng"],
         "tags": ["主人公"]
     },
     "ルーミア": {
@@ -144,20 +158,6 @@
             "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - 妖々跋扈.mp3"
         ],
         "searchNames": ["橙", "Chen", "橙", "cheng"],
-        "tags": ["妖々夢"]
-    },
-    "アリス・マーガトロイド": {
-        "card": "アリス＆上海蓬莱.png",
-        "music": [
-            "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - 人形裁判　～ 人の形弄びし少女.mp3",
-            "東方妖々夢 ～ Perfect Cherry Blossom/上海アリス幻樂団 - ブクレシュティの人形師.mp3",
-            "幻想曲抜萃 ～ 東方萃夢想/DayDisc/08. ブクレシュティの人形師.mp3",
-            "幻想曲抜萃 ～ 東方萃夢想/NightDisc/08. 人形裁判.mp3",
-            "全人類ノ天楽録 ～ 東方緋想天/ArrangeDisc/05. ブクレシュティの人形師.mp3",
-            "核熱造神ヒソウテンソク ～ 東方非想天則/12. the Grimoire of Alice.mp3",
-            "夢違科学世紀 ～ Changeability of Strange Dream/08. 人形裁判 ～ 人の形弄びし少女.mp3"
-        ],
-        "searchNames": ["アリス・マーガトロイド", "Arisu Magatoroido", "Alice Margatroid", "爱丽丝·玛格特罗依德", "ailisi mageteluoyide"],
         "tags": ["妖々夢"]
     },
     "リリーホワイト": {
