@@ -135,6 +135,11 @@ const Localization = {
 
   GameUnusedCards: u("Unused Cards", "未使用卡牌"),
 
+  ChatMessageSenderSystem: u("System", "系统"),
+  ChatMessagePeerConnectionError: u("Connection error", "连接错误"),
+  ChatMessageConnected: u("Connected to opponent", "已连接到对手"),
+  ChatMessageDisconnected: u("Disconnected from opponent", "已与对手断开连接"),
+
 }
 
 export { Localization, GetLocalizedString, setLocale };

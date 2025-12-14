@@ -136,6 +136,10 @@ type EventSyncStart = {
   rngSeed: number;
 }
 
+type EventChat = {
+  type: "chat";
+  message: string;
+}
 
 type EventRequestSyncData = {
   type: "requestSyncData";
@@ -228,7 +232,8 @@ type Event = (
   EventSyncWinnerDetermined | EventSyncStart | EventSyncNextTurn |
   EventStopGame | EventSwitchTraditionalMode | EventPauseMusic | EventResumeMusic |
   EventGive | EventSyncSettings | EventFilterMusicByDeck |
-  EventNotifyName | EventRequestSyncData | EventSyncData
+  EventNotifyName | EventRequestSyncData | EventSyncData |
+  EventChat
 ); 
 
 class GamePeer {

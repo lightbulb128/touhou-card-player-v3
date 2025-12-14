@@ -23,6 +23,7 @@ import {
 import { GameButton } from "./GameTabControls";
 import { MonospaceFontFamily, NoFontFamily } from "./Theme";
 import { GetLocalizedString, Localization } from "../types/Localization";
+import ChatBox, { ChatMessage } from "./ChatBox";
 
 
 export interface GameTabProps {
@@ -99,6 +100,8 @@ type CPUOpponentSetting = {
   reactionTimeStdDev: number;
   mistakeRate: number;
 }
+const maxDeckRows = 5;
+const maxDeckColumns = 15;
 
 function getCardTransitionString(duration: string): string {
   return `top ${duration}, left ${duration}, transform ${duration}, background-color ${duration}, width ${duration}, height ${duration}`;
@@ -174,6 +177,7 @@ export default function GameTab({
     mistakeRate: 0.2
   });
   const [cpuOpponentClickTimeout, setCpuOpponentClickTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [chatMessages, setChatMessages] = useState<Array<ChatMessage>>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const gref = useRef<{
     timerState: TimerState
@@ -272,6 +276,7 @@ export default function GameTab({
     setDragInfo(null);
     setHoveringCardInfo(null);
     notifyGameEnd();
+    addSystemChatMessage(GetLocalizedString(Localization.ChatMessageDisconnected));
   }
   peer.notifyConnected = (peer: GamePeer) => {
     if (isRemotePlayerOpponent && isServer) {
@@ -286,6 +291,7 @@ export default function GameTab({
       judge.resetGameState();
       setJudge(judge.reconstruct());
     } 
+    addSystemChatMessage(GetLocalizedString(Localization.ChatMessageConnected));
     peer.sendEvent({
       type: "notifyName",
       name: judge.myName
@@ -293,6 +299,15 @@ export default function GameTab({
   }
   
   // region utility funcs
+
+  const addSystemChatMessage = (message: string) => {
+    const newMessage: ChatMessage = {
+      role: "system",
+      sender: GetLocalizedString(Localization.ChatMessageSenderSystem),
+      message: message,
+    }
+    setChatMessages((messages) => [...messages, newMessage]);
+  }
 
   const canvasPositionToDeckPosition = (x: number, y: number, allowedDecks: Array<number> = [0, 1]): DeckPosition | null => {
     for (const deckIndex of allowedDecks as (0 | 1)[]) {
@@ -422,6 +437,7 @@ export default function GameTab({
     }
   }
 
+  // region outer event handler
   const outerEventHandler = (event: Event) => {
     switch (event.type) {
       case "pauseMusic": {
@@ -440,6 +456,15 @@ export default function GameTab({
         });
         break;
       }
+      case "chat": {
+        const newMessage: ChatMessage = {
+          role: "peer",
+          sender: judge.opponentName,
+          message: event.message,
+        }
+        setChatMessages((messages) => [...messages, newMessage]);
+        break;
+      }
     }
   }
   outerRef.current.notifyOuterEventHandler = outerEventHandler;
@@ -453,6 +478,7 @@ export default function GameTab({
   useEffect(() => {
     if (peerError) {
       console.error("Peer error:", peerError);
+      addSystemChatMessage(GetLocalizedString(Localization.ChatMessagePeerConnectionError) + " - " + peerError);
     }
     peer.ensurePeerNotNull();
   }, [peerError]);
@@ -579,11 +605,48 @@ export default function GameTab({
   }, [judge.myName])
 
   useEffect(() => {
+    // save to local storage
+    // if is default setting, do not save
+    if (cardWidthPercentage === 0.08 && 
+        judge.deckRows === 3 && 
+        judge.deckColumns === 8) {
+      return;
+    }
+    localStorage.setItem("gameSetting", JSON.stringify({
+      cardWidthPercentage,
+      deckRows: judge.deckRows,
+      deckColumns: judge.deckColumns
+    }));
+  }, [cardWidthPercentage, judge.deckRows, judge.deckColumns]);
+
+  useEffect(() => {
     // load myname from local storage
     const storedName = localStorage.getItem("myName");
     if (storedName && storedName.length > 0 && storedName !== "Player") {
       judge.myName = storedName;
       setJudge(judge => judge.reconstruct());
+    }
+    // load game setting from local storage
+    const storedSetting = localStorage.getItem("gameSetting");
+    if (storedSetting) {
+      try {
+        const settingObj = JSON.parse(storedSetting);
+        if (typeof settingObj.cardWidthPercentage === "number") {
+          setCardWidthPercentage(settingObj.cardWidthPercentage);
+          console.log("Loaded card width percentage:", settingObj.cardWidthPercentage);
+        }
+        if (typeof settingObj.deckRows === "number" && settingObj.deckRows >= 1 && settingObj.deckRows <= maxDeckRows) {
+          judge.deckRows = settingObj.deckRows;
+          console.log("Loaded deck rows:", settingObj.deckRows);
+        }
+        if (typeof settingObj.deckColumns === "number" && settingObj.deckColumns >= 1 && settingObj.deckColumns <= maxDeckColumns) {
+          judge.deckColumns = settingObj.deckColumns;
+          console.log("Loaded deck columns:", settingObj.deckColumns);
+        }
+        setJudge(judge => judge.reconstruct());
+      } catch (e) {
+        console.error("Failed to parse stored game setting:", e);
+      }
     }
   }, [])
 
@@ -1102,8 +1165,6 @@ export default function GameTab({
     setCardWidthPercentage(newPercentage);
   }
 
-  const maxDeckRows = 5;
-  const maxDeckColumns = 15;
   const addDeckRow = () => {
     if (judge.deckRows >= maxDeckRows) return;
     judge.adjustDeckSize(judge.deckRows + 1, judge.deckColumns, true);
@@ -1267,7 +1328,7 @@ export default function GameTab({
     }
     { // card larger button
       let disabled = cardWidthPercentage >= cardWidthPercentageMax;
-      if (x + buttonSize * 3 + canvasMargin > canvasWidth) {
+      if (x + 150 + canvasMargin > canvasWidth) {
         disabled = true;
       }
       otherElements.push(
@@ -2372,6 +2433,51 @@ export default function GameTab({
         </Typography>
       );
     }
+  }
+
+  // chat messages box
+  // region chat box
+  {
+    const width = deckLeft - canvasMargin - 40;
+    const y = playerDeckBottom;
+    const x = canvasMargin;
+    const shown = isRemotePlayerOpponent;
+    otherElements.push(
+      <Box
+        key="chat-messages-box"
+        sx={{
+          position: "absolute",
+          left: `${x}px`,
+          top: `${y}px`,
+          width: `${width}px`,
+          height: `${deckHeight}px`,
+          transform: `translateY(-100%)`,
+          transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease, opacity 0.3s ease",
+          opacity: shown ? 1.0 : 0.0,
+          alignItems: "flex-end",
+          display: "flex",
+          overflow: "hidden",
+        }}
+      >
+        <ChatBox
+          messages={chatMessages}
+          onSendMessage={(message: string) => {
+            const trimmed = message.trim();
+            if (trimmed.length === 0) return;
+            const newMessage: ChatMessage = {
+              sender: judge.myName,
+              message: trimmed,
+              role: "me"
+            };
+            sendEvent({
+              type: "chat",
+              message: message,
+            });
+            setChatMessages([...chatMessages, newMessage]);
+          }}
+        />
+      </Box>
+    );
   }
 
   // region final render
