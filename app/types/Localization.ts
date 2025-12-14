@@ -135,6 +135,7 @@ const Localization = {
 
   GameUnusedCards: u("Unused Cards", "未使用卡牌"),
 
+  ChatMessageHint: u("Type a message to chat...", "输入消息以聊天..."),
   ChatMessageSenderSystem: u("System", "系统"),
   ChatMessagePeerConnectionError: u("Connection error", "连接错误"),
   ChatMessageConnected: u("Connected to opponent.", "已连接到对手。"),

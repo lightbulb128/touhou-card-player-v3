@@ -58,11 +58,15 @@ class PickEvent {
   timestamp: number;
   player: Player;
   cardInfo: CardInfo;
+  deckPosition: DeckPosition;
 
-  constructor(timestamp: number, player: Player, cardInfo: CardInfo) {
+  constructor(
+    timestamp: number, player: Player, cardInfo: CardInfo, deckPosition: DeckPosition
+  ) {
     this.timestamp = timestamp;
     this.player = player;
     this.cardInfo = cardInfo;
+    this.deckPosition = deckPosition;
   }
 
   characterId(): CharacterId {return this.cardInfo.characterId!}
@@ -210,7 +214,11 @@ const reverseSyncData = (data: SyncData): SyncData => {
   const newDeck = [reconstructCardArray(data.deck[Bob]), reconstructCardArray(data.deck[Alice])];
   const newPickEvents = data.pickEvents.map((event) => {
     const newPlayer = event.player === Alice ? Bob : Alice;
-    return new PickEvent(event.timestamp, newPlayer, reconstructCardInfo(event.cardInfo));
+    return new PickEvent(
+      event.timestamp, newPlayer, 
+      reconstructCardInfo(event.cardInfo),
+      {deckIndex: newPlayer, cardIndex: event.deckPosition.cardIndex}
+    );
   });
   const newCollectedCards = [reconstructCardArray(data.collectedCards[Bob]), reconstructCardArray(data.collectedCards[Alice])];
   return {
@@ -301,21 +309,23 @@ class GamePeer {
         this.refresh();
       });
       this.peer.on("connection", (conn: DataConnection) => {
-        if (this.dataConnection) {
-          console.log("[Warning] New connection arrived. Replace with new");
-        }
-        this.dataConnection = conn;
-        this.dataConnection.on("open", () => {
-          this.notifyConnected(this);
+        if (!this.dataConnection) {
+          this.dataConnection = conn;
+          this.dataConnection.on("open", () => {
+            this.notifyConnected(this);
+            this.refresh();
+          });
+          this.dataConnection.on("close", () => {
+            this.dataConnection?.removeAllListeners("data");
+            this.notifyDisconnected();
+            this.dataConnection = null;
+          });
+          console.log("[GamePeer] Incoming connection from peer:", conn.peer);
           this.refresh();
-        });
-        this.dataConnection.on("close", () => {
-          this.dataConnection?.removeAllListeners("data");
-          this.notifyDisconnected();
-          this.dataConnection = null;
-        });
-        console.log("[GamePeer] Incoming connection from peer:", conn.peer);
-        this.refresh();
+        } else {
+          console.log("[GamePeer] Rejecting incoming connection from peer (already connected):", conn.peer);
+          conn.close();
+        }
       });
       this.peer.on("disconnected", () => {
         this.dataConnection?.removeAllListeners("data");
@@ -820,7 +830,6 @@ class GameJudge {
       net = Math.max(net, -cardCount);
     }
     this.givesLeft = net;
-    console.log("givesleft = ", this.givesLeft);
     return true;
   }
 
@@ -837,17 +846,30 @@ class GameJudge {
     // check if the winner is determined (someone picked the current characterId)
     let winnerFound = false;
     let winningCardInfo: CardInfo | null = null;
+    let winningPickEvent: PickEvent | null = null;
     for (const event of this.pickEvents) {
       if (event.characterId() === currentCharacterId) {
         this.turnWinner = event.player;
         winningCardInfo = event.cardInfo;
         winnerFound = true;
+        winningPickEvent = event;
         break;
       }
     }
     if (winnerFound) {
       this.state = GameJudgeState.TurnWinnerDetermined;
-      this.collectedCards[this.turnWinner!].push(winningCardInfo!);
+      {
+        let alreadyInCollected = false;
+        for (const cardInfo of this.collectedCards[this.turnWinner!]) {
+          if (cardInfo.equals(winningCardInfo!)) {
+            alreadyInCollected = true;
+            break;
+          }
+        }
+        if (!alreadyInCollected) {
+          this.collectedCards[this.turnWinner!].push(winningCardInfo!);
+        }
+      }
       let correctCardOnSide: Player | null = null;
       // collect card to collected
       let deckCardFound = null;
@@ -864,10 +886,13 @@ class GameJudge {
         }
       }
       if (deckCardFound !== null) {
+        if (winningPickEvent?.deckPosition.deckIndex !== correctCardOnSide) {
+          console.warn(`[GameJudge.notifyPickEvent] Winning pick event deck index (${winningPickEvent?.deckPosition.deckIndex}) does not match correct card side (${correctCardOnSide})`);
+        }
         // remove from deck
-        this.removeFromDeck(correctCardOnSide!, deckCardFound, send);
+        this.removeFromDeck(correctCardOnSide!, deckCardFound, false);
       }
-      this.calculateGivesFromPickEvents(correctCardOnSide);
+      this.calculateGivesFromPickEvents(winningPickEvent?.deckPosition.deckIndex || null);
       // send sync winner determined
       if (this.hasRemotePlayer() && this.isServer) {
         const syncData = this.buildSyncData();
@@ -1148,12 +1173,13 @@ class GameJudge {
     if (!mistake) {
       // pick the correct card from any deck
       for (const player of [Alice, Bob]) {
-        for (const cardInfo of this.deck[player]) {
+        for (const [index, cardInfo] of this.deck[player].entries()) {
           if (cardInfo.characterId === currentCharacterId) {
             this.notifyPickEvent(new PickEvent(
               Date.now() - (this.turnStartTimestamp || 0),
               Bob,
               cardInfo,
+              {deckIndex: player as Player, cardIndex: index}
             ), true);
             return;
           }
@@ -1161,21 +1187,22 @@ class GameJudge {
       }
     } else {
       // pick a wrong card from any deck
-      const selectableCardInfos: Array<CardInfo> = [];
+      const selectableCardInfos: Array<[CardInfo, DeckPosition]> = [];
       for (const player of [Alice, Bob]) {
-        for (const cardInfo of this.deck[player]) {
+        for (const [index, cardInfo] of this.deck[player].entries()) {
           if (cardInfo.characterId !== null && cardInfo.characterId !== currentCharacterId) {
-            selectableCardInfos.push(cardInfo);
+            selectableCardInfos.push([cardInfo, {deckIndex: player as Player, cardIndex: index}]);
           }
         }
       }
       if (selectableCardInfos.length > 0) {
         const randomIndex = Math.floor(Math.random() * selectableCardInfos.length);
-        const cardInfo = selectableCardInfos[randomIndex];
+        const [cardInfo, deckPosition] = selectableCardInfos[randomIndex];
         this.notifyPickEvent(new PickEvent(
           Date.now() - (this.turnStartTimestamp || 0),
           Bob,
           cardInfo,
+          deckPosition
         ), true);
       }
     }
@@ -1392,6 +1419,10 @@ class GameJudge {
           e.pickEvent.timestamp,
           cRole(e.pickEvent.player),
           e.pickEvent.cardInfo,
+          {
+            deckIndex: cRole(e.pickEvent.deckPosition.deckIndex),
+            cardIndex: e.pickEvent.deckPosition.cardIndex,
+          }
         ), false);
         this.g().refresh(this);
         break;

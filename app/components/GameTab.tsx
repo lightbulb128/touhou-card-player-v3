@@ -714,7 +714,8 @@ export default function GameTab({
         if (judge.state === GameJudgeState.TurnStart) {
           cardProps.onClick = () => {
             judge.notifyPickEvent(new PickEvent(
-              Date.now(), 0, cardInfo
+              Date.now() - musicStartTimestamp, 0, cardInfo, 
+              {deckIndex: deckIndex, cardIndex: index}
             ), true);
             setJudge(judge.reconstruct());
           };
@@ -2570,6 +2571,7 @@ export default function GameTab({
             transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
             opacity: unusedCards.length > 0 ? 1.0 : 0.0,
             fontFamily: NoFontFamily,
+            userSelect: "none",
           }}
         >
           {GetLocalizedString(Localization.GameUnusedCards)}

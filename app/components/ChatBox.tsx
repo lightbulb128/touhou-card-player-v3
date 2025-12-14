@@ -1,5 +1,7 @@
 import { Stack, TextField, Typography } from "@mui/material";
 import { useState } from "react";
+import { NoFontFamily } from "./Theme";
+import { GetLocalizedString, Localization } from "../types/Localization";
 
 type ChatMessage = {
   role: "me" | "peer" | "system";
@@ -21,7 +23,7 @@ export default function ChatBox({
   return <Stack spacing={0} direction="column" width="100%" >
     {messages.map((msg, index) => {
       return <Typography key={index} variant="body1"
-        sx={{ width: "100%", wordBreak: "break-word",}}
+        sx={{ width: "100%", wordBreak: "break-word", fontFamily: NoFontFamily }}
       >
         <strong style={{ color: msg.role === "me" 
             ? "#9f9fffff" : msg.role === "peer" 
@@ -35,11 +37,15 @@ export default function ChatBox({
       fullWidth
       variant="outlined"
       size="small"
-      placeholder="Type a message to chat..."
+      placeholder={GetLocalizedString(Localization.ChatMessageHint)}
       value={messageInput}
       sx={{
         width: "100%",
         paddingTop: 1,
+      }}
+      slotProps={{
+        input: { sx: { fontFamily: NoFontFamily } },
+        inputLabel: { sx: { fontFamily: NoFontFamily } },
       }}
       onChange={(e) => setMessageInput(e.target.value)}
       onKeyDown={(e) => {
