@@ -299,6 +299,9 @@ class GamePeer {
           });
           console.log("[GamePeer] Incoming connection from peer:", conn.peer);
           this.refresh();
+        } else {
+          console.log("[GamePeer] Rejecting incoming connection from peer (already connected):", conn.peer);
+          conn.close();
         }
       });
       this.peer.on("disconnected", () => {
