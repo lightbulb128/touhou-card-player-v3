@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Touhou Cards V3
 
-## Getting Started
+Touhou Cards V3 is a browser-based deck experience that mixes visual flair with flexible multiplayer tooling. Launch the live build at [Touhou Cards V3](https://lightbulb128.github.io/touhou-card-player-v3/) or jump directly into presets:
 
-First, run the development server:
+- [Base URL](https://lightbulb128.github.io/touhou-card-player-v3/)
+- [Glitch effect](https://lightbulb128.github.io/touhou-card-player-v3/?g=1)
+- [Chinese locale](https://lightbulb128.github.io/touhou-card-player-v3/?locale=zh)
+- [English locale](https://lightbulb128.github.io/touhou-card-player-v3/?locale=en)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Running
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Development
+1. Install dependencies: `npm install`
+2. Start the dev server with hot reload: `npm run dev`
+3. Visit http://localhost:3000 and iterate inside the `app/` directory.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build & Preview
+1. Produce an optimized bundle: `npm run build`
+2. Preview the production build locally: `npm run start`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Playing
+- **Play tab**: Queue characters; Click any card in the queue to temporarily disable it without losing your ordering.
+- **List tab**: Rapidly filter and jump between every available character for quick playing.
 
-## Learn More
+## Config
+- Swap between multiple card collections to your liking.
+- Choose where music loads from.
+- Load predefined music presets choose musics you like.
+- Override the soundtrack for any single character when you need a custom anthem.
 
-To learn more about Next.js, take a look at the following resources:
+## Game Matching
+- **Single practice**: Solo sandbox with instant resets for testing lineups.
+- **CPU opponent**: Battle an automated rival to keep skills sharp offline.
+- **Remote opponent (WebRTC via PeerJS)**:
+  - One player acts as server, sharing a join code for another player to connect.
+	- Settings sync automatically on connection and again when the game begins.
+	- Set your display name so friends can find you in the lobby list.
+	- Card handoffs are resilient, ensuring transfers finish even on unstable links.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## More Features
+- Local storage keeps visual settings, playlists.
+- Built with Next.js, React 19, and MUI 7 for fast UI iteration and theme consistency.
