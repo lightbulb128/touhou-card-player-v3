@@ -39,6 +39,7 @@ export interface GameTabProps {
   notifyPauseMusic: () => void;
   notifyPlayMusic: () => void;
   notifyPlayCountdownAudio: () => void;
+  setNextSongPRNGSeed: (seed: number) => void;
   setCurrentCharacterId: (characterId: CharacterId) => void;
   setPlayingOrder: (order: Array<CharacterId>) => void;
   setCharacterTemporaryDisabled: (map: Map<CharacterId, boolean>) => void;
@@ -121,6 +122,7 @@ export default function GameTab({
   setMusicSelection,
   setPlaybackSetting,
   setVolume,
+  setNextSongPRNGSeed,
 }: GameTabProps) {
 
   // region states
@@ -140,6 +142,7 @@ export default function GameTab({
     setCharacterTemporaryDisabled: setCharacterTemporaryDisabled,
     setMusicSelection: setMusicSelection,
     setPlaybackSetting: setPlaybackSetting,
+    setNextSongPRNGSeed: setNextSongPRNGSeed,
     notifyTurnWinnerDetermined: (_unused: Player | null) => {},
     notifyTurnStarted: (_characterId: CharacterId) => {},
     peer: peer,
@@ -435,6 +438,10 @@ export default function GameTab({
 
   // region use effects
 
+  // useEffect(() => {
+  //   judge.sendNextTurnSync(outerNotifyMusicPlayStart.currentTime);
+  // }, [outerNotifyMusicPlayStart])
+
   useEffect(() => {
     if (peerError) {
       console.error("Peer error:", peerError);
@@ -522,6 +529,7 @@ export default function GameTab({
     outerRef.current.setCharacterTemporaryDisabled = setCharacterTemporaryDisabled;
     outerRef.current.setMusicSelection = setMusicSelection;
     outerRef.current.setPlaybackSetting = setPlaybackSetting;
+    outerRef.current.setNextSongPRNGSeed = setNextSongPRNGSeed;
   }, [
     data,
     playingOrder, 
@@ -534,7 +542,8 @@ export default function GameTab({
     setPlayingOrder,
     setCharacterTemporaryDisabled,
     setMusicSelection,
-    setPlaybackSetting
+    setPlaybackSetting,
+    setNextSongPRNGSeed,
   ]);
 
   useEffect(() => {

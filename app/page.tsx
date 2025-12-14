@@ -64,6 +64,7 @@ export default function Home() {
   const [inGame, setInGame] = useState<boolean>(false);
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1200);
   const [volume, setVolume] = useState<number>(1.0);
+  const nextSongPRNGSeedRef = useRef<number>(Math.floor(Math.random() * 2147483647));
   const isOnSmallerScreen = windowWidth < 600;
 
   // region utility funcs
@@ -83,6 +84,10 @@ export default function Home() {
     const musicId = musicList[selection];
     return musicId;
   }
+
+  const setNextSongPRNGSeed = (seed: number) => {
+    nextSongPRNGSeedRef.current = seed;
+  }
   
   const getMusicSourceUrl = (character: CharacterId): string | null => {
     const musicId = getMusicId(character);
@@ -96,7 +101,13 @@ export default function Home() {
   const setRandomPlaybackPosition = () => {
     if (audioElementRef.current && playbackSetting.randomStartPosition) {
       const duration = audioElementRef.current.duration;
-      const randomPosition = (duration < 10) ? 0 : Math.random() * (duration - 10);
+      if (isNaN(duration) || duration <= 0) {
+        console.log("Audio duration is not available yet.");
+        return;
+      }
+      const random01 = nextSongPRNGSeedRef.current / 2147483647;
+      const randomPosition = (duration < 10) ? 0 : random01 * (duration - 10);
+      console.log("seed=", nextSongPRNGSeedRef.current, " r01=", random01, " duration=", duration, " pos=", randomPosition);
       audioElementRef.current.currentTime = randomPosition;
       setPlayback((original) => {
         return { ...original, currentTime: randomPosition };
@@ -675,6 +686,7 @@ export default function Home() {
                 notifyGameStart={handleGameStart}
                 notifyGameEnd={handleGameEnd}
                 notifyPlayCountdownAudio={playCountdownAudio}
+                setNextSongPRNGSeed={setNextSongPRNGSeed}
                 setCurrentCharacterId={setCurrentCharacterId}
                 setPlayingOrder={setPlayingOrder}
                 setCharacterTemporaryDisabled={setCharacterTemporaryDisabled}

@@ -133,11 +133,13 @@ type EventSyncStart = {
   traditionalMode: boolean;
   randomStartPosition: boolean;
   playbackDuration: number;
+  rngSeed: number;
 }
 
 type EventSyncNextTurn = {
   type: "syncNextTurn";
   data: SyncData;
+  rngSeed: number;
 };
 
 type EventStopGame = {
@@ -341,6 +343,7 @@ type OuterRefObject = {
   setMusicSelection: (map: MusicSelectionMap) => void;
   setCurrentCharacterId: (id: CharacterId) => void;
   setPlaybackSetting: (setting: PlaybackSetting) => void;
+  setNextSongPRNGSeed: (seed: number) => void;
   notifyTurnWinnerDetermined: (winner: Player | null) => void;
   notifyTurnStarted: (characterId: CharacterId) => void;
   notifyStartGame: (order: Array<CharacterId> | null) => Array<CharacterId>; // return the new playing order
@@ -663,13 +666,16 @@ class GameJudge {
       // if this is server, actively send an ack with full data
       if (this.hasRemotePlayer() && this.isServer) {
         const syncData = this.buildSyncData(newPlayingOrder);
+        const prngseed = Math.floor(Math.random() * 2147483647);
         this.g().peer.sendEvent({
           type: "syncStart",
           data: syncData,
           traditionalMode: this.traditionalMode,
           randomStartPosition: this.g().playbackSetting.randomStartPosition,
           playbackDuration: this.g().playbackSetting.playbackDuration,
+          rngSeed: prngseed,
         });
+        this.g().setNextSongPRNGSeed(prngseed);
       }
       return; 
     }
@@ -916,16 +922,30 @@ class GameJudge {
     this.g().refresh(this);
   }
 
+  // sendNextTurnSync(playbackCurrentTime: number): void {
+  //   if (this.hasRemotePlayer()) {
+  //     const syncData = this.buildSyncData();
+  //     this.g().peer.sendEvent({
+  //       type: "syncNextTurn",
+  //       data: syncData,
+  //       playbackCurrentTime: playbackCurrentTime,
+  //     });
+  //   }
+  // }
+
   _clientNextTurn(): void {
     this.confirmations.next = new GameConfirmation();
     if (this.isGeneralServer()) { 
       if (this.hasRemotePlayer()) {
         // send
         const syncData = this.buildSyncData();
+        const prngseed = Math.floor(Math.random() * 2147483647);
         this.g().peer.sendEvent({
           type: "syncNextTurn",
           data: syncData,
+          rngSeed: prngseed,
         });
+        this.g().setNextSongPRNGSeed(prngseed);
       }
       this._serverNextTurn(); 
       return; 
@@ -1325,9 +1345,11 @@ class GameJudge {
             randomStartPosition: e.randomStartPosition,
             playbackDuration: e.playbackDuration,
           })
+          this.g().setNextSongPRNGSeed(e.rngSeed);
         } else {
           this.clientWaitAcknowledge = false;
           e = event as EventSyncNextTurn;
+          this.g().setNextSongPRNGSeed(e.rngSeed);
         }
         // reverse the sync data
         const data = reverseSyncData(e.data);
