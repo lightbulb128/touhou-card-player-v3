@@ -923,14 +923,21 @@ export default function GameTab({
   if (unusedTotalWidth > cardWidth) {
     unusedD = (unusedTotalWidth - cardWidth) / (unusedCards.length - 1);
   }
-  const unusedCardsBottom = playerDeckTop + deckHeight;
   if (unusedD > 4) { unusedD = 5; }
+  let unusedCardsYBase = playerDeckTop + deckHeight - cardHeight;
+  if (hasOpponent) {
+    unusedCardsYBase = opponentDeckTop + deckHeight - cardHeight - 30;
+  }
+  if (judge.state !== GameJudgeState.SelectingCards) {
+    unusedCardsYBase = opponentDeckTop + deckHeight - cardHeight;
+  }
+  const unusedCardsBottom = unusedCardsYBase + cardHeight;
   unusedCards.forEach((cardInfo, index) => {
     const cardKey = cardInfo.toKey();
     const cardProps = cards.get(cardKey);
     if (cardProps === undefined) return;
     cardProps.x = canvasMargin + unusedD * index;
-    cardProps.y = playerDeckTop + deckHeight - cardHeight - unusedD * index;
+    cardProps.y = unusedCardsYBase - unusedD * index;
     cardProps.zIndex = index;
   });
 
@@ -2438,8 +2445,8 @@ export default function GameTab({
   // chat messages box
   // region chat box
   {
-    const width = deckLeft - canvasMargin - 40;
-    const y = playerDeckBottom;
+    const width = deckLeft - canvasMargin * 2 - 40;
+    const y = playerDeckTop;
     const x = canvasMargin;
     const shown = isRemotePlayerOpponent;
     otherElements.push(
@@ -2451,7 +2458,6 @@ export default function GameTab({
           top: `${y}px`,
           width: `${width}px`,
           height: `${deckHeight}px`,
-          transform: `translateY(-100%)`,
           transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease, opacity 0.3s ease",
           opacity: shown ? 1.0 : 0.0,
           alignItems: "flex-end",

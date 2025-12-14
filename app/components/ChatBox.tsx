@@ -21,7 +21,7 @@ export default function ChatBox({
   return <Stack spacing={0} direction="column" width="100%" >
     {messages.map((msg, index) => {
       return <Typography key={index} variant="body1"
-        sx={{ width: "100%" }}
+        sx={{ width: "100%", wordBreak: "break-word",}}
       >
         <strong style={{ color: msg.role === "me" 
             ? "#9f9fffff" : msg.role === "peer" 

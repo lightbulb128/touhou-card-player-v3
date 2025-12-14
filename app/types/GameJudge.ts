@@ -838,37 +838,36 @@ class GameJudge {
     this.sortPickEvents();
     // check if the winner is determined (someone picked the current characterId)
     let winnerFound = false;
+    let winningCardInfo: CardInfo | null = null;
     for (const event of this.pickEvents) {
       if (event.characterId() === currentCharacterId) {
         this.turnWinner = event.player;
+        winningCardInfo = event.cardInfo;
         winnerFound = true;
         break;
       }
     }
     if (winnerFound) {
       this.state = GameJudgeState.TurnWinnerDetermined;
+      this.collectedCards[this.turnWinner!].push(winningCardInfo!);
       let correctCardOnSide: Player | null = null;
       // collect card to collected
-      if (this.turnWinner !== null) {
-        let found = null;
-        for (const deckPlayer of [Alice, Bob]) {
-          for (const cardInfo of this.deck[deckPlayer]) {
-            if (cardInfo.characterId === currentCharacterId) {
-              this.collectedCards[this.turnWinner].push(cardInfo);
-              found = cardInfo;
-              correctCardOnSide = deckPlayer as Player;
-              break;
-            }
-          }
-          if (found !== null) {
+      let deckCardFound = null;
+      for (const deckPlayer of [Alice, Bob]) {
+        for (const cardInfo of this.deck[deckPlayer]) {
+          if (cardInfo.characterId === currentCharacterId) {
+            deckCardFound = cardInfo;
+            correctCardOnSide = deckPlayer as Player;
             break;
           }
         }
-        if (found !== null) {
-          // remove from deck
-          this.removeFromDeck(Alice, found, send);
-          this.removeFromDeck(Bob, found, send);
+        if (deckCardFound !== null) {
+          break;
         }
+      }
+      if (deckCardFound !== null) {
+        // remove from deck
+        this.removeFromDeck(correctCardOnSide!, deckCardFound, send);
       }
       this.calculateGivesFromPickEvents(correctCardOnSide);
       // send sync winner determined
@@ -1154,7 +1153,7 @@ class GameJudge {
         for (const cardInfo of this.deck[player]) {
           if (cardInfo.characterId === currentCharacterId) {
             this.notifyPickEvent(new PickEvent(
-              Date.now(),
+              Date.now() - (this.turnStartTimestamp || 0),
               Bob,
               cardInfo,
             ), true);
@@ -1176,7 +1175,7 @@ class GameJudge {
         const randomIndex = Math.floor(Math.random() * selectableCardInfos.length);
         const cardInfo = selectableCardInfos[randomIndex];
         this.notifyPickEvent(new PickEvent(
-          Date.now(),
+          Date.now() - (this.turnStartTimestamp || 0),
           Bob,
           cardInfo,
         ), true);
