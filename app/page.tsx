@@ -582,8 +582,8 @@ export default function Home() {
               !isOnSmallerScreen ? [
                 "Alice is the best!",
                 "We need more Alice!",
-                "Alice for president!",
-                "Where is Alice?",
+                "All hail Alice!",
+                "Alice is right!",
                 "Alice fumofumo~",
               ][PagePRNG.hash("Alice") % 5] : "Alice!",
               undefined, 

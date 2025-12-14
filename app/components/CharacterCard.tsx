@@ -170,6 +170,7 @@ export function CharacterCard({
 							style={{
 								userSelect: 'none',
 								transition: 'filter 0.3s ease',
+								objectFit: 'contain',
 								filter: isGrayscale ? 'grayscale(100%)' : 'none',
 							}}
 						/>

@@ -19,6 +19,7 @@ class PagePRNG {
     if (str === null || str === undefined) {
       return 0;
     }
+    new PagePRNG();
     let hash = this.seed;
     for (let i = 0; i < str.length; i++) {
       hash = (hash * 31 + str.charCodeAt(i)) % 2147483647;
