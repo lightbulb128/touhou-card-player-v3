@@ -253,9 +253,11 @@ class GamePeer {
       this.notifyPeerError(`DataConnection error: ${err}`);
     });
     dataConnection.on("open", () => {
-      this.dataConnection = dataConnection;
-      this.notifyConnected(this);
-      this.refresh();
+      if (!this.dataConnection) {
+        this.dataConnection = dataConnection;
+        this.notifyConnected(this);
+        this.refresh();
+      }
     });
     dataConnection.on("close", () => {
       dataConnection?.removeAllListeners("data");
@@ -284,18 +286,20 @@ class GamePeer {
         this.refresh();
       });
       this.peer.on("connection", (conn: DataConnection) => {
-        this.dataConnection = conn;
-        this.dataConnection.on("open", () => {
-          this.notifyConnected(this);
+        if (!this.dataConnection) {
+          this.dataConnection = conn;
+          this.dataConnection.on("open", () => {
+            this.notifyConnected(this);
+            this.refresh();
+          });
+          this.dataConnection.on("close", () => {
+            this.dataConnection?.removeAllListeners("data");
+            this.notifyDisconnected();
+            this.dataConnection = null;
+          });
+          console.log("[GamePeer] Incoming connection from peer:", conn.peer);
           this.refresh();
-        });
-        this.dataConnection.on("close", () => {
-          this.dataConnection?.removeAllListeners("data");
-          this.notifyDisconnected();
-          this.dataConnection = null;
-        });
-        console.log("[GamePeer] Incoming connection from peer:", conn.peer);
-        this.refresh();
+        }
       });
       this.peer.on("disconnected", () => {
         this.dataConnection?.removeAllListeners("data");
