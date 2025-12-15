@@ -887,7 +887,7 @@ class GameJudge {
       }
       // if on the other side's collected, remove it
       {
-        const opponent = winningPickEvent!.deckPosition.deckIndex === Alice ? Bob : Alice;
+        const opponent = winningPickEvent!.player === Alice ? Bob : Alice;
         let indexToRemove = -1;
         for (let i = 0; i < this.collectedCards[opponent].length; i++) {
           if (this.collectedCards[opponent][i].characterId === currentCharacterId) {
@@ -896,6 +896,7 @@ class GameJudge {
           }
         }
         if (indexToRemove !== -1) {
+          console.log(`[GameJudge.notifyPickEvent] Removing card ${currentCharacterId} from ${opponent}'s collected cards.`);
           this.collectedCards[opponent].splice(indexToRemove, 1);
         }
       }

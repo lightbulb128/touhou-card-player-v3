@@ -643,6 +643,7 @@ export default function GameTab({
           judge.deckColumns = settingObj.deckColumns;
           console.log("Loaded deck columns:", settingObj.deckColumns);
         }
+        judge.adjustDeckSize(judge.deckRows, judge.deckColumns, false);
         setJudge(judge => judge.reconstruct());
       } catch (e) {
         console.error("Failed to parse stored game setting:", e);
