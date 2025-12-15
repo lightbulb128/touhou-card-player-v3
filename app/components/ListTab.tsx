@@ -106,6 +106,9 @@ export default function ListTab(props: ListTabProps) {
                   userSelect: "none",
                   textDecoration: isDisabled ? "line-through" : "none",
                   color: textcolor,
+                  textOverflow: "ellipsis",
+                  overflow: "hidden",
+                  whiteSpace: "nowrap",
                 }}
               >
                 {charId} ({musicInfo.title})
