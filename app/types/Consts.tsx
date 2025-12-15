@@ -35,15 +35,20 @@ const CardCollections: Array<[string, JSX.Element]> = ([
 
 const MusicSources: Array<{ key: string; url: string; description: string }> = ([
   {
-    key: "cloudflare-r2",
+    key: "Cloudflare R2",
     url: "sources_cloudflare_r2.json",
     description: "Music hosted in a Cloudflare R2 Bucket. Cloudflare R2 Storage allows developers to store large amounts of unstructured data without the costly egress bandwidth fees associated with typical cloud storage services."
   },
   {
-    key: "thbwiki",
+    key: "THBWiki",
     url: "sources_thbwiki.json",
     description: "Music from THBWiki. Why, sometimes very slow."
   },
+  {
+    key: "Netease 163",
+    url: "sources_163.json",
+    description: "Music from NetEase Cloud Music (163.com). Note that Netease blocks access from outside China."
+  }
 ]);
 
 const DefaultMusicSource = MusicSources[0];

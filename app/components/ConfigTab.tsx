@@ -361,7 +361,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                               width: "100%",
                             }}
                             src={exampleMusicSrc === "" ? undefined : exampleMusicSrc}
-                            autoPlay={true}
+                            autoPlay={false}
                           >
                             Your browser does not support the audio element.
                           </audio>
