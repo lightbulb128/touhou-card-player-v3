@@ -1109,19 +1109,19 @@
     },
     "サニーミルク": {
         "card": "サニーミルク.png",
-        "music": "东方三月精 ～ Eastern and Little Nature Deity/サニールチルフレクション.mp3",
+        "music": "東方三月精 ～ Eastern and Little Nature Deity/サニールチルフレクション.mp3",
         "searchNames": ["サニーミルク", "Sani Miruku", "Sunny Milk", "桑尼·米尔克", "sangni mierke"],
         "tags": ["三月精"]
     },
     "ルナチャイルド": {
         "card": "ルナチャイルド.png",
-        "music": "东方三月精 ～ Eastern and Little Nature Deity/夜だから眠れない.mp3",
+        "music": "東方三月精 ～ Eastern and Little Nature Deity/夜だから眠れない.mp3",
         "searchNames": ["ルナチャイルド", "Runa Chairudo", "Luna Child", "露娜·切露德", "luna qielude"],
         "tags": ["三月精"]
     },
     "スターサファイア": {
         "card": "スターサファイア.png",
-        "music": "东方三月精 ～ Eastern and Little Nature Deity/妖精燦々として.mp3",
+        "music": "東方三月精 ～ Eastern and Little Nature Deity/妖精燦々として.mp3",
         "searchNames": ["スターサファイア", "Suta Safaia", "Star Sapphire", "斯塔·萨菲雅", "sita safeiya"],
         "tags": ["三月精"]
     },
