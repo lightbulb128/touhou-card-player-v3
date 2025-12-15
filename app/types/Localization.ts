@@ -37,6 +37,7 @@ const Localization = {
   ConfigTabMusicSource: u("Music Source", "音乐源"),
   ConfigTabMusicSelectionPresets: u("Music Selection Presets", "音乐选择预设"),
   ConfigTabMusicSelectionSingle: u("Music Selection Single", "音乐选择单曲"),
+  ConfigTabMusicSourceExample: u("Example", "示例曲目"),
   ConfigTabSelected: u("Selected", "正在使用"),
   ConfigTabSelect: u("Select", "使用"),
   ConfigTabApply: u("Apply", "应用"),

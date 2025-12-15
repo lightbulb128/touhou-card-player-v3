@@ -1,5 +1,5 @@
-import { Box, Button, Collapse, Divider, FormControl, Grid, MenuItem, Paper, Select, Stack, TextField, Typography } from "@mui/material";
-import { AddRounded, RemoveRounded } from "@mui/icons-material";
+import { Box, Button, Collapse, Divider, FormControl, Grid, IconButton, MenuItem, Paper, Select, Stack, TextField, Typography } from "@mui/material";
+import { AddRounded, RemoveRounded, Shuffle } from "@mui/icons-material";
 import { CharacterId, getMusicInfo, GlobalData, MusicSelectionMap } from "../types/Configs";
 import { Dispatch, useState } from "react";
 import { CardCollections, DefaultMusicSource, MusicSources } from "../types/Consts";
@@ -13,6 +13,7 @@ import {
 } from "@mui/icons-material";
 import { NoFontFamily } from "./Theme";
 import { GetLocalizedString, Localization } from "../types/Localization";
+import Link from "next/link";
 
 interface ConfigDrawerProps {
   title: string;
@@ -90,6 +91,7 @@ export default function ConfigTab(props: ConfigTabProps) {
   const [musicSourceKey, setMusicSourceKey] = useState(DefaultMusicSource.key);
   const [focusedPreset, setFocusedPreset] = useState<string | null>(null);
   const [searchText, setSearchText] = useState<string>("");
+  const [randomSeed, setRandomSeed] = useState<number>(1);
   const prng = new PagePRNG();
   const cardExampleSources: string[] = [];
   const sourcePool = new Array<string>();
@@ -132,6 +134,26 @@ export default function ConfigTab(props: ConfigTabProps) {
       });
       presets.set(GetLocalizedString(Localization.ConfigTabPresetDisable) + tag, selectionMap);
     }); 
+  }
+  
+  let exampleMusicSource = "";
+  let exampleCharacterId = "";
+  let exampleMusicInfo: {album:string, title:string} | null = null;
+  let exampleMusicSrc = "";
+  if (props.data.characterConfigs !== undefined) {
+    const randomCharacterIndex = (prng.next() + randomSeed) % props.data.characterConfigs.size;
+    // console.log("randomCharacterIndex", randomCharacterIndex);
+    exampleCharacterId = Array.from(props.data.characterConfigs.keys())[randomCharacterIndex];
+    // console.log("exampleCharacterId", exampleCharacterId);
+    const characterConfig = props.data.characterConfigs.get(exampleCharacterId)!;
+    // console.log("characterConfig", characterConfig);
+    if (characterConfig) {
+      const randomMusicIndex = prng.next() % characterConfig.musics.length;
+      exampleMusicSource = characterConfig.musics[randomMusicIndex];
+      exampleMusicInfo = getMusicInfo(exampleMusicSource);
+      exampleMusicSrc = props.data.sources.get(exampleMusicSource) || "";
+      // console.log("exampleMusicSource", exampleMusicSrc);
+    }
   }
 
   const applyMusicSelectionPreset = (selectionMap: MusicSelectionMap) => {
@@ -240,6 +262,7 @@ export default function ConfigTab(props: ConfigTabProps) {
             })}
           </Stack>
         </ConfigDrawer>
+
         <ConfigDrawer title={GetLocalizedString(Localization.ConfigTabMusicSource)}>
           <Stack direction="column" spacing={1}
             sx={{width: "100%"}}
@@ -252,7 +275,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                   {index !== 0 && <Divider />}
                   <Grid container spacing={1} width="100%">
                     <Grid size={8} sx={{display: "flex", alignItems: "center"}}>
-                      <Typography variant="body2">
+                      <Typography variant="body1">
                         {key}
                       </Typography>
                     </Grid>
@@ -288,12 +311,70 @@ export default function ConfigTab(props: ConfigTabProps) {
                         {description}
                       </Typography>
                     </Grid>
+                    {musicSourceKey === key &&
+                      <Grid size={12}>
+                        <Stack direction="row" spacing={1} sx={{ 
+                          height: "2.5em",
+                          alignItems: "center",
+                          display: "flex",
+                        }}>
+                          <IconButton sx={{
+                            width: "40px", height: "40px",
+                            flexShrink: 0,
+                          }}>
+                            <Shuffle fontSize="small"
+                              onClick={() => {
+                                const newSeed = Math.floor(prng.next() * 1000000);
+                                setRandomSeed(newSeed);
+                              }}
+                            />
+                          </IconButton>
+                          <Stack direction="column">
+                            <Typography variant="body1" color="primary" sx={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}>
+                              {GetLocalizedString(Localization.ConfigTabMusicSourceExample)}
+                            </Typography>
+                            <Link href={exampleMusicSrc} target="_blank" rel="noopener noreferrer">
+                              <Typography variant="body2" color="textSecondary" fontSize="small" sx={{
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                "&:hover": { textDecoration: "underline" }
+                              }}>
+                                {exampleCharacterId} / {exampleMusicInfo?.title} ({exampleMusicInfo?.album})
+                              </Typography>
+                            </Link>
+                          </Stack>
+                        </Stack>
+                      </Grid>
+                    }
+                    {
+                      musicSourceKey === key &&
+                      <Grid size={12}>
+                        <Box width="100%">
+                          <audio 
+                            controls 
+                            style={{
+                              width: "100%",
+                            }}
+                            src={exampleMusicSrc === "" ? undefined : exampleMusicSrc}
+                            autoPlay={true}
+                          >
+                            Your browser does not support the audio element.
+                          </audio>
+                        </Box>
+                      </Grid>
+                    }
                   </Grid>
                 </Stack>
               );
             })}
           </Stack>
         </ConfigDrawer>
+
         <ConfigDrawer title={GetLocalizedString(Localization.ConfigTabMusicSelectionPresets)}>
           <Stack direction="column" spacing={1}
             sx={{width: "100%"}}
