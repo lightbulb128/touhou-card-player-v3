@@ -917,7 +917,7 @@ export default function GameTab({
     }
   }
 
-  let unusedTotalWidth = (canvasWidth - deckWidth) / 2 - canvasSpacing - canvasMargin;
+  let unusedTotalWidth = (canvasWidth - deckWidth) / 2 - canvasSpacing - canvasMargin - 45;
   if (unusedTotalWidth - cardWidth > 50) {
     unusedTotalWidth = 50 + cardWidth;
   }
@@ -927,11 +927,11 @@ export default function GameTab({
   }
   if (unusedD > 4) { unusedD = 5; }
   let unusedCardsYBase = playerDeckTop + deckHeight - cardHeight;
-  if (hasOpponent) {
+  if (hasOpponent && isRemotePlayerOpponent) {
     unusedCardsYBase = opponentDeckTop + deckHeight - cardHeight - 30;
-  }
-  if (judge.state !== GameJudgeState.SelectingCards) {
-    unusedCardsYBase = opponentDeckTop + deckHeight - cardHeight;
+    if (judge.state !== GameJudgeState.SelectingCards) {
+      unusedCardsYBase = opponentDeckTop + deckHeight - cardHeight;
+    }
   }
   const unusedCardsBottom = unusedCardsYBase + cardHeight;
   unusedCards.forEach((cardInfo, index) => {

@@ -454,7 +454,7 @@ class GameJudge {
   constructor(outerRef: RefObject<OuterRefObject>) {
     this.myName = "Player";
     this.opponentName = "Opponent";
-    this.traditionalMode = false; 
+    this.traditionalMode = true; 
     this.isServer = true;
     this.opponentType = OpponentType.None;
     this.state = GameJudgeState.SelectingCards;
@@ -785,6 +785,7 @@ class GameJudge {
         // for the right pick:
         // if the pick is on the picking player's side of deck, net does not change.
         // otherwise, picker give one card to the opponent
+        console.log("event.player=", event.player, " correctCardOnSide=", correctCardOnSide);
         if (event.player === Alice && correctCardOnSide === Bob) {
           net += 1;
         }
@@ -829,6 +830,7 @@ class GameJudge {
       }
       net = Math.max(net, -cardCount);
     }
+    console.log(`[GameJudge.calculateGivesFromPickEvents] Calculated gives left: ${net}`);
     this.givesLeft = net;
     return true;
   }
@@ -907,7 +909,8 @@ class GameJudge {
         // remove from deck
         this.removeFromDeck(correctCardOnSide!, deckCardFound, false);
       }
-      this.calculateGivesFromPickEvents(winningPickEvent?.deckPosition.deckIndex || null);
+      console.log("winningPickEvent=", winningPickEvent);
+      this.calculateGivesFromPickEvents(winningPickEvent!.deckPosition.deckIndex);
       // send sync winner determined
       if (this.hasRemotePlayer() && this.isServer) {
         const syncData = this.buildSyncData();
