@@ -1,7 +1,7 @@
 import { Box, Button, Collapse, Divider, FormControl, Grid, IconButton, MenuItem, Paper, Select, Stack, TextField, Typography } from "@mui/material";
 import { AddRounded, RemoveRounded, Shuffle } from "@mui/icons-material";
 import { CharacterId, getMusicInfo, GlobalData, MusicSelectionMap } from "../types/Configs";
-import { Dispatch, useState } from "react";
+import { Dispatch, useEffect, useState } from "react";
 import { CardCollections, DefaultMusicSource, MusicSources } from "../types/Consts";
 import { CharacterCard } from "./CharacterCard";
 import { PagePRNG } from "../types/PagePrng";
@@ -190,6 +190,17 @@ export default function ConfigTab(props: ConfigTabProps) {
 
   let searched = false;
 
+  useEffect(() => {
+    // load music source from localStorage
+    const storedMusicSourceKey = localStorage.getItem("musicSourceKey");
+    if (storedMusicSourceKey) {
+      const source = MusicSources.find((source) => source.key === storedMusicSourceKey);
+      if (source) {
+        setMusicSourceKey(storedMusicSourceKey);
+      }
+    }
+  }, []);
+
   return (
     <Box
       sx={{width: "100%", display: "flex", justifyContent: "center"}}
@@ -294,9 +305,11 @@ export default function ConfigTab(props: ConfigTabProps) {
                               return data.reconstruct();
                             });
                           });
+                          localStorage.setItem("musicSourceKey", key);
                         }}
                         sx={{
-                          height: "2em"
+                          height: "2em",
+                          fontFamily: NoFontFamily,
                         }}
                         disabled={musicSourceKey === key}
                       >

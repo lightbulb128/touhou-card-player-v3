@@ -2,14 +2,19 @@ import { Box, Paper, Stack, SxProps } from "@mui/material";
 import { CardAspectRatio } from "../types/Configs";
 import { PagePRNG } from "../types/PagePrng";
 import Image from "next/image";
+import { useEffect } from "react";
+
+let fromR2: boolean | null = null;
+const CardR2Prefix = "https://r2bucket-touhou.hgjertkljw.org/";
+const CardLocalPrefix = "./";
 
 const CardCollectionPrefix: Map<string, string> = new Map([
-	["dairi-sd", "https://r2bucket-touhou.hgjertkljw.org/cards/"],
-	["dairi", "https://r2bucket-touhou.hgjertkljw.org/cards-dairi/"],
-	["enbu", "https://r2bucket-touhou.hgjertkljw.org/cards-enbu/"],
-	["enbu-dolls", "https://r2bucket-touhou.hgjertkljw.org/cards-enbu-dolls/"],
-	["thbwiki-sd", "https://r2bucket-touhou.hgjertkljw.org/cards-thwiki/"],
-	["zun", "https://r2bucket-touhou.hgjertkljw.org/cards-zun/"],
+	["dairi-sd", "cards/"],
+	["dairi", "cards-dairi/"],
+	["enbu", "cards-enbu/"],
+	["enbu-dolls", "cards-enbu-dolls/"],
+	["thbwiki-sd", "cards-thwiki/"],
+	["zun", "cards-zun/"],
 ]);
 
 let staticGlitch: boolean | null = null;
@@ -59,6 +64,21 @@ export function CharacterCard({
 	paperElevation, paperVariant, upsideDown,
 	...props
 }: CharacterCardProps) {
+
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const r2 = params.get("r2");
+		fromR2 = r2!==undefined && r2 !== null;
+	}, []);
+
+	const getR2Prefix = () => {
+		if (fromR2) {
+			return CardR2Prefix;
+		} else {
+			return CardLocalPrefix;
+		}
+	}
+
 	if (backgroundState === undefined) {
 		backgroundState = CardBackgroundState.Normal;
 	}
@@ -161,7 +181,7 @@ export function CharacterCard({
 						}}
 					>
 						<Image
-							src={cardSourcePrefix + cardSource}
+							src={getR2Prefix() + cardSourcePrefix + cardSource}
 							alt="Character Card"
 							draggable="false"
 							unoptimized

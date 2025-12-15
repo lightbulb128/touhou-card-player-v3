@@ -16,7 +16,7 @@ import CustomTabs from "./components/CustomTabs";
 import ListTab from "./components/ListTab";
 import GameTab from "./components/GameTab";
 import ConfigTab from "./components/ConfigTab";
-import { DefaultMusicSource } from "./types/Consts";
+import { DefaultMusicSource, MusicSources } from "./types/Consts";
 import { GetLocalizedString, Localization, setLocale } from "./types/Localization";
 import { PagePRNG } from "./types/PagePrng";
 
@@ -209,9 +209,18 @@ export default function Home() {
         return resp.json();
       };
 
+      let musicSourcesUrl = DefaultMusicSource.url;
+      const storedMusicSourceKey = localStorage.getItem("musicSourceKey");
+      if (storedMusicSourceKey) {
+        const source = MusicSources.find((source) => source.key === storedMusicSourceKey);
+        if (source) {
+          musicSourcesUrl = source.url;
+        }
+      }
+
       const [characters, sources, presets] = await Promise.all([
         fetchJson("character.json"),
-        fetchJson(DefaultMusicSource.url),
+        fetchJson(musicSourcesUrl),
         fetchJson("idpresets.json"),
       ]);
 
@@ -565,7 +574,7 @@ export default function Home() {
           }
         ></audio>
         <audio id="countdown-audio-element" ref={countdownAudioElementRef}
-          src="https://r2bucket-touhou.hgjertkljw.org/mp3/Bell3.mp3"
+          src="Bell3.mp3"
           onEnded={handleCountdownEnded}
         ></audio>
       </div>

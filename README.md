@@ -6,6 +6,7 @@ Touhou Cards V3 is a browser-based deck experience that mixes visual flair with 
 - [Glitch effect](https://lightbulb128.github.io/touhou-card-player-v3/?g=1)
 - [Chinese locale](https://lightbulb128.github.io/touhou-card-player-v3/?locale=zh)
 - [English locale](https://lightbulb128.github.io/touhou-card-player-v3/?locale=en)
+- [Use R2 bucket for cards rendering](https://lightbulb128.github.io/touhou-card-player-v3/?r2=1). We use Github Pages images by default.
 
 ## Running
 
