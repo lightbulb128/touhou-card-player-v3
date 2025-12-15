@@ -885,8 +885,22 @@ class GameJudge {
           break;
         }
       }
+      // if on the other side's collected, remove it
+      {
+        const opponent = winningPickEvent!.deckPosition.deckIndex === Alice ? Bob : Alice;
+        let indexToRemove = -1;
+        for (let i = 0; i < this.collectedCards[opponent].length; i++) {
+          if (this.collectedCards[opponent][i].characterId === currentCharacterId) {
+            indexToRemove = i;
+            break;
+          }
+        }
+        if (indexToRemove !== -1) {
+          this.collectedCards[opponent].splice(indexToRemove, 1);
+        }
+      }
       if (deckCardFound !== null) {
-        if (winningPickEvent?.deckPosition.deckIndex !== correctCardOnSide) {
+        if (winningPickEvent!.deckPosition.deckIndex !== correctCardOnSide) {
           console.warn(`[GameJudge.notifyPickEvent] Winning pick event deck index (${winningPickEvent?.deckPosition.deckIndex}) does not match correct card side (${correctCardOnSide})`);
         }
         // remove from deck
