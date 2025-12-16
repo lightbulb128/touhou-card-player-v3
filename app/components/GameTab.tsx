@@ -2087,7 +2087,7 @@ export default function GameTab({
       y -= buttonSize + canvasSpacing;
     } 
     { // traditional mode explanation
-      const hidden = judge.state !== GameJudgeState.SelectingCards;
+      const hidden = !hasOpponent || judge.state !== GameJudgeState.SelectingCards;
       const text = (judge.traditionalMode 
         ? GetLocalizedString(Localization.GameModeTraditionalDescription)
         : GetLocalizedString(Localization.GameModeNonTraditionalDescription)
