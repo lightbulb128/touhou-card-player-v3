@@ -7,9 +7,10 @@ import {
 } from "../types/Configs";
 import { useState, useEffect, JSX, useRef } from "react";
 import { 
-  CardInfo, GameJudge, GameJudgeState, OpponentType, OuterRefObject, 
+  CardInfo, GameJudge, GameJudgeState, MatchType, OuterRefObject, 
   PickEvent, Player, DeckPosition, GamePeer,
-  Event
+  Event, SendOption,
+  PlayerInfo
 } from "../types/GameJudge";
 import { CardBackgroundState, CharacterCard } from "./CharacterCard";
 import {
@@ -155,7 +156,7 @@ export default function GameTab({
     notifyStartGame: () => { return new Array<CharacterId>(); },
     notifyNextTurnCountdown: () => {},
     notifyStopGame: () => {},
-    notifyOuterEventHandler: (_event: Event) => {},
+    notifyOuterEventHandler: (_sender, _event: Event) => {},
     refresh: (judge: GameJudge) => { setJudge(judge.reconstruct()); },
   });
   const [judge, setJudge] = useState<GameJudge>(new GameJudge(outerRef));
@@ -198,24 +199,22 @@ export default function GameTab({
   const canvasWidth = (containerRef.current ? containerRef.current.clientWidth : 800);
   const cardWidth = canvasWidth * cardWidthPercentage;
   const cardHeight = cardWidth / CardAspectRatio;
-  const hasOpponent = judge.opponentType !== OpponentType.None;
-  const isRemotePlayerOpponent = judge.opponentType === OpponentType.RemotePlayer;
-  const isServer = !isRemotePlayerOpponent || judge.isServer;
-  const isClient = isRemotePlayerOpponent && !judge.isServer;
-  const playerNameHeight = isRemotePlayerOpponent ? 32 : 0;
+  const showPlayerName = !(judge.matchType === MatchType.None || judge.matchType === MatchType.CPU);
+  const showOpponentDeck = judge.isOneOnOne();
+  const playerNameHeight = showPlayerName ? 32 : 0;
   const opponentCollectedTop = canvasMargin;
   let opponentDeckTop = canvasMargin + playerNameHeight;
-  if (hasOpponent && judge.state !== GameJudgeState.SelectingCards) {
+  if (showOpponentDeck && judge.state !== GameJudgeState.SelectingCards) {
     opponentDeckTop = canvasMargin + cardHeight + canvasSpacing + playerNameHeight + 16;
   }
   const deckColumns = judge.deckColumns; const deckRows = judge.deckRows;
   const deckWidth = deckColumns * cardWidth + (deckColumns - 1) * canvasSpacing;
   const deckHeight = deckRows * cardHeight + (deckRows - 1) * canvasSpacing;
-  const opponentDeckBottom = opponentDeckTop + (hasOpponent ? deckHeight : 0);
+  const opponentDeckBottom = opponentDeckTop + (showOpponentDeck ? deckHeight : 0);
   const deckLeft = (canvasWidth - deckWidth) / 2;
   const deckRight = deckLeft + deckWidth;
   const sliderHeight = 28;
-  const middleBarTop = opponentDeckBottom + (hasOpponent ? canvasSpacing : 0);
+  const middleBarTop = opponentDeckBottom + (showOpponentDeck ? canvasSpacing : 0);
   let middleBarHeight = 0;
   if (judge.state === GameJudgeState.SelectingCards) {
     middleBarHeight = 16 + cardHeight + canvasSpacing + sliderHeight;
@@ -233,6 +232,7 @@ export default function GameTab({
     canvasHeight = playerDeckBottom + canvasMargin;
   }
   const cardSelectionOverlap = cardWidth * 0.3;
+  const sendToAll = { send: true, except: null } as SendOption;
 
   data.characterConfigs.forEach((characterConfig, characterId) => {
     characterConfig.card.forEach((cardId, index) => {
@@ -254,49 +254,87 @@ export default function GameTab({
     })
   });
 
-  judge.deck.forEach((d) => {
-    d.forEach((cardInfo) => {
+  judge.players.forEach((player) => {
+    player.deck.forEach((cardInfo) => {
       cardInsideDeck.add(cardInfo.toKey());
       if (cardInfo.characterId !== null) {
         characterInsideDeck.add(cardInfo.characterId);
       }
     })
   });
-  judge.collectedCards.forEach((c) => {
-    c.forEach((cardInfo) => {
+  judge.players.forEach((player) => {
+    player.collected.forEach((cardInfo) => {
       cardInsideCollected.add(cardInfo.toKey());
     });
   });
 
-  peer.resetListener(judge.remoteEventListener.bind(judge));
-  peer.notifyDisconnected = () => {
+  if (judge.isServer()) {
+    peer.resetListenerFromClient(judge.remoteEventListener.bind(judge));
+  } else {
+    const bindWith0 = (justData: unknown) => {
+      judge.remoteEventListener(0, justData);
+    }
+    peer.resetListenerFromServer(bindWith0);
+  }
+
+  peer.notifyClientDisconnected = (id: number) => {
     judge.state = GameJudgeState.SelectingCards;
     judge.stopGame();
     setJudge(judge.reconstruct());
     setDragInfo(null);
     setHoveringCardInfo(null);
     notifyGameEnd();
-    addSystemChatMessage(GetLocalizedString(Localization.ChatMessageDisconnected));
+    const message = GetLocalizedString(Localization.ChatMessageClientDisconnected, new Map<string, string>([[ "clientName", judge.players[id].name ]]));
+    addSystemChatMessage(message);
+    judge.sendEvent({
+      type: "chat", sender: "system", message: message
+    }, sendToAll);
+    judge.removePlayer(id);
   }
-  peer.notifyConnected = (peer: GamePeer) => {
-    if (isRemotePlayerOpponent && isServer) {
-      peer.sendEvent({
-        type: "syncSettings",
-        traditionalMode: judge.traditionalMode,
-        randomStartPosition: playbackSetting.randomStartPosition,
-        playbackDuration: playbackSetting.playbackDuration,
-        deckColumns: judge.deckColumns,
-        deckRows: judge.deckRows,
-      })
-      judge.resetGameState();
-      setJudge(judge.reconstruct());
-    } 
+
+  peer.notifyDisconnectedFromServer = () => {
+    judge.state = GameJudgeState.SelectingCards;
+    judge.stopGame();
+    setJudge(judge.reconstruct());
+    setDragInfo(null);
+    setHoveringCardInfo(null);
+    notifyGameEnd();
+    const message = GetLocalizedString(Localization.ChatMessageServerDisconnected);
+    addSystemChatMessage(message);
+    judge.players[0] = judge.players[1]
+    judge.players = [judge.players[0]];
+  }
+
+  peer.notifyClientConnected = (id: number) => {
+    if (judge.players.length <= id) {
+      judge.addPlayer();
+    } else {
+      console.warn(`[GameTab] Client connected with id ${id}, but player already exists.`);
+      return;
+    }
+    peer.sendEventToClient({
+      type: "syncSettings",
+      traditionalMode: judge.traditionalMode,
+      randomStartPosition: playbackSetting.randomStartPosition,
+      playbackDuration: playbackSetting.playbackDuration,
+      deckColumns: judge.deckColumns,
+      deckRows: judge.deckRows,
+    }, id)
+    judge.resetGameState();
+    // add a observer player
     addSystemChatMessage(GetLocalizedString(Localization.ChatMessageConnected));
-    peer.sendEvent({
-      type: "notifyName",
-      name: judge.myName
-    })
+    setJudge(judge.reconstruct());
   }
+
+  peer.notifyConnectedToServer = () => {
+    if (judge.players.length <= 1) {
+      judge.addPlayer();
+    }
+    judge.players = [judge.players[0], judge.players[1]];
+    addSystemChatMessage(GetLocalizedString(Localization.ChatMessageConnected));
+    setJudge(judge.reconstruct());
+  }
+    
   
   // region utility funcs
 
@@ -309,9 +347,10 @@ export default function GameTab({
     setChatMessages((messages) => [...messages, newMessage]);
   }
 
+  // Here the allowedDeck only mean 0->near side, 1->far side, not player index.
   const canvasPositionToDeckPosition = (x: number, y: number, allowedDecks: Array<number> = [0, 1]): DeckPosition | null => {
     for (const deckIndex of allowedDecks as (0 | 1)[]) {
-      if (judge.opponentType === OpponentType.None && deckIndex === 1) {
+      if (!showOpponentDeck && deckIndex === 1) {
         continue;
       }
       const deckTop = deckIndex === 0 ? playerDeckTop : opponentDeckTop;
@@ -427,43 +466,82 @@ export default function GameTab({
   }
 
   const resetOpponentDeck = () => {
-    judge.resetOpponentDeck();
+    judge.players = [judge.players[0]];
+    if (judge.matchType === MatchType.CPU) {
+      judge.players = [judge.players[0]]
+    }
     setJudge(judge.reconstruct());
   }
 
-  const sendEvent = (event: Event) => {
-    if (judge.hasRemotePlayer() && peer.hasDataConnection()) {
-      peer.sendEvent(event);
-    }
-  }
-
   // region outer event handler
-  const outerEventHandler = (event: Event) => {
+  const outerEventHandler = (sender: number, event: Event) => {
+
+    const sendExcept = { send: true, except: sender } as SendOption;
+
     switch (event.type) {
       case "pauseMusic": {
         notifyPauseMusic();
+        if (judge.isServer()) {
+          judge.sendEvent(event, sendExcept);
+        }
         break;
       }
       case "resumeMusic": {
         notifyPlayMusic();
+        if (judge.isServer()) {
+          judge.sendEvent(event, sendExcept);
+        }
         break;
       }
       case "syncSettings": {
-        setPlaybackSetting({
-          ...playbackSetting,
-          randomStartPosition: event.randomStartPosition,
-          playbackDuration: event.playbackDuration,
-        });
+        if (!judge.isClient()) {
+          console.log("[GameTab] Received syncSettings event on non-client.");
+        } else {
+          setPlaybackSetting({
+            ...playbackSetting,
+            randomStartPosition: event.randomStartPosition,
+            playbackDuration: event.playbackDuration,
+          });
+        }
         break;
       }
       case "chat": {
         const newMessage: ChatMessage = {
-          role: "peer",
-          sender: judge.opponentName,
+          role: event.sender === "system" ? "system" : "peer",
+          sender: event.sender === "system" ? GetLocalizedString(Localization.ChatMessageSenderSystem) : judge.players[sender].name,
           message: event.message,
         }
         setChatMessages((messages) => [...messages, newMessage]);
+        if (judge.isServer()) {
+          judge.sendEvent(event, sendExcept);
+        }
         break;
+      }
+      case "notifyName": {
+        if (!event.isObserver) {
+          // reorganize players so that the clients are always in the first
+          const newOrder = [];
+          for (let i = 1; i < judge.players.length; i++) {
+            if (!judge.players[i].isObserver) {newOrder.push(i);}
+          }
+          for (let i = 1; i < judge.players.length; i++) {
+            if (judge.players[i].isObserver) {newOrder.push(i);}
+          }
+          let changed = false;
+          for (let i = 1; i < judge.players.length; i++) {
+            if (newOrder[i-1] !== i) {changed = true; break;}
+          }
+          const newPlayers: Array<PlayerInfo> = [];
+          for (let i = 0; i < newOrder.length; i++) {
+            peer.dataConnectionToClients[newOrder[i] - 1].index = i + 1;
+            newPlayers.push(judge.players[newOrder[i]]);
+          }
+          if (changed) {
+            judge.players = [judge.players[0], ...newPlayers];
+          }
+          judge.broadcastNames();
+          setJudge(judge.reconstruct());
+        }
       }
     }
   }
@@ -521,8 +599,6 @@ export default function GameTab({
           }));
           break;
         }
-        // default:
-        //   setTimerState((timerState) => ({ ...timerState })); // trigger re-render
       }
     }, 20);
     setTimerState((timerState) => ({ ...timerState, intervalHandle: handle }));
@@ -537,10 +613,10 @@ export default function GameTab({
     // for all card in decks, check if in playing order.
     // if not, remove from deck.
     let deckChanged = false;
-    judge.deck.forEach((deck, deckIndex) => {
-      deck.forEach((cardInfo, _cardIndex) => {
+    judge.players.forEach((player, playerIndex) => {
+      player.deck.forEach((cardInfo, cardIndex) => {
         if (cardInfo.characterId !== null && !inPlayingOrder.has(cardInfo.characterId)) {
-          judge.removeFromDeck(deckIndex as 0 | 1, cardInfo, true);
+          judge.removeFromDeck(playerIndex as 0 | 1, cardIndex, sendToAll);
           deckChanged = true;
         }
       });
@@ -599,10 +675,10 @@ export default function GameTab({
 
   useEffect(() => {
     // save to local storage
-    if (judge.myName !== "Player") {
-      localStorage.setItem("myName", judge.myName);
+    if (judge.players[0].name !== "Player" && judge.players.length === 1) {
+      localStorage.setItem("myName", judge.players[0].name);
     }
-  }, [judge.myName])
+  }, [judge.players[0].name])
 
   useEffect(() => {
     // save to local storage
@@ -623,7 +699,7 @@ export default function GameTab({
     // load myname from local storage
     const storedName = localStorage.getItem("myName");
     if (storedName && storedName.length > 0 && storedName !== "Player") {
-      judge.myName = storedName;
+      judge.players[0].name = storedName;
       setJudge(judge => judge.reconstruct());
     }
     // load game setting from local storage
@@ -643,7 +719,7 @@ export default function GameTab({
           judge.deckColumns = settingObj.deckColumns;
           console.log("Loaded deck columns:", settingObj.deckColumns);
         }
-        judge.adjustDeckSize(judge.deckRows, judge.deckColumns, false);
+        judge.adjustDeckSize(judge.deckRows, judge.deckColumns, { send: false, except: null });
         setJudge(judge => judge.reconstruct());
       } catch (e) {
         console.error("Failed to parse stored game setting:", e);
@@ -674,11 +750,13 @@ export default function GameTab({
 
   // region render cards
 
-  judge.deck.forEach((deck, di) => {
-    const deckIndex = di as 0 | 1;
-    if (deckIndex === 1 && judge.opponentType === OpponentType.None) {
+  judge.players.forEach((player, pi) => {
+    const deck = player.deck;
+    const playerIndex = pi as 0 | 1;
+    if (playerIndex === 1 && !showOpponentDeck) {
       return;
     }
+    const deckIndex = ((judge.isClient()) ? 1 - playerIndex : playerIndex) as 0 | 1;
     deck.forEach((cardInfo, index) => {
       {
         let placeholderHidden = cardInfo.characterId !== null;
@@ -704,7 +782,11 @@ export default function GameTab({
         cardProps.y = pos.y;
         cardProps.zIndex = 200;
         if (deckIndex === 1) { cardProps.upsideDown = true; }
-        if (judge.state === GameJudgeState.SelectingCards) {
+        let setHover = judge.state === GameJudgeState.SelectingCards;
+        if (judge.state === GameJudgeState.TurnWinnerDetermined && deckIndex === 0) {
+          setHover = true;
+        }
+        if (setHover) {
           cardProps.onMouseEnter = () => {
             setHoveringCardInfo(cardInfo);
           };
@@ -715,18 +797,10 @@ export default function GameTab({
         if (judge.state === GameJudgeState.TurnStart) {
           cardProps.onClick = () => {
             judge.notifyPickEvent(new PickEvent(
-              Date.now() - musicStartTimestamp, 0, cardInfo, 
-              {deckIndex: deckIndex, cardIndex: index}
-            ), true);
+              Date.now() - musicStartTimestamp, judge.myPlayerIndex, cardInfo, 
+              {deckIndex: playerIndex, cardIndex: index}
+            ), { send: true, except: null });
             setJudge(judge.reconstruct());
-          };
-        }
-        if (deckIndex == 0 && judge.state !== GameJudgeState.SelectingCards && judge.givesLeft > 0) {
-          cardProps.onMouseEnter = () => {
-            setHoveringCardInfo(cardInfo);
-          };
-          cardProps.onMouseLeave = () => {
-            setHoveringCardInfo(null);
           };
         }
       }
@@ -775,16 +849,18 @@ export default function GameTab({
   }
 
   if (judge.state !== GameJudgeState.SelectingCards) {
-    judge.collectedCards.forEach((d, playerId) => {
-      if (playerId === 1 && judge.opponentType === OpponentType.None) { return; }
-      const y = (playerId === 0) ? playerCollectedTop : opponentCollectedTop;
-      const startX = (playerId === 0) ? (canvasWidth - canvasMargin - cardWidth * 2 - canvasSpacing) : (canvasMargin + cardWidth + canvasSpacing);
+    judge.players.forEach((player, playerId) => {
+      const d = player.collected;
+      if (playerId === 1 && judge.matchType === MatchType.None) { return; }
+      const deckId = (judge.isClient()) ? 1 - playerId : playerId;
+      const y = (deckId === 0) ? playerCollectedTop : opponentCollectedTop;
+      const startX = (deckId === 0) ? (canvasWidth - canvasMargin - cardWidth * 2 - canvasSpacing) : (canvasMargin + cardWidth + canvasSpacing);
       // add a text element
       {
-        const textLeft = (playerId === 0) ? (canvasWidth - canvasMargin - cardWidth) : canvasMargin;
+        const textLeft = (deckId === 0) ? (canvasWidth - canvasMargin - cardWidth) : canvasMargin;
         otherElements.push(
           <Box
-            key={`collected-text-${playerId}`}
+            key={`collected-text-${deckId}`}
             sx={{
               position: "absolute",
               left: `${textLeft}px`,
@@ -808,7 +884,7 @@ export default function GameTab({
       const totalWidth = canvasWidth - canvasMargin * 2 - cardWidth * 2 - canvasSpacing;
       let delta = d.length === 1 ? 0 : totalWidth / (d.length - 1);
       if (delta > cardWidth * 0.66) { delta = cardWidth * 0.66; }
-      if (playerId === 0) {delta = -delta;}
+      if (deckId === 0) {delta = -delta;}
       d.forEach((cardInfo, index) => {
         const cardKey = cardInfo.toKey();
         const cardProps = cards.get(cardKey);
@@ -822,11 +898,11 @@ export default function GameTab({
         cardProps.onMouseLeave = () => {
           setHoveringCardInfo(null);
         };
-        if (playerId === 1) {
+        if (deckId === 1) {
           cardProps.upsideDown = true;
         }
         if (hoveringCardInfo !== null && hoveringCardInfo.toKey() === cardInfo.toKey()) {
-          cardProps.y += (playerId === 0) ? -16 : 16;
+          cardProps.y += (deckId === 0) ? -16 : 16;
         }
       });
     });
@@ -858,7 +934,7 @@ export default function GameTab({
       dragInfo.currentMouseX,
       dragInfo.currentMouseY,
       // can drop to opponent deck if there is a opponent and it is not a remote player.
-      (!hasOpponent || isRemotePlayerOpponent) ? [0] : [0, 1]
+      (!showOpponentDeck || judge.isOneOnOne()) ? [0] : [0, 1]
     );
     const draggingKey = dragInfo.cardInfo.toKey();
     const props = cards.get(draggingKey);
@@ -896,10 +972,12 @@ export default function GameTab({
         if (deckPos.deckIndex === 0) {
           // swap self cards.
           canDrop = true;
-        } else {
+        } else if (judge.isOneOnOne()) {
           // only if gives>0 and opponent slot is empty
-          const isEmptySlot = judge.deck[1][deckPos.cardIndex].characterId === null;
-          if (judge.givesLeft > 0 && isEmptySlot) {
+          const opponentPlayerIndex = (judge.isClient()) ? 0 : 1;
+          const givesLeft = (judge.isServer() ? (judge.givesLeft > 0) : (judge.givesLeft < 0));
+          const isEmptySlot = judge.players[opponentPlayerIndex].deck[deckPos.cardIndex].characterId === null;
+          if (givesLeft && isEmptySlot) {
             canDrop = true;
           }
         }
@@ -925,9 +1003,9 @@ export default function GameTab({
   if (unusedTotalWidth > cardWidth) {
     unusedD = (unusedTotalWidth - cardWidth) / (unusedCards.length - 1);
   }
-  if (unusedD > 4) { unusedD = 5; }
+  if (unusedD > 5) { unusedD = 5; }
   let unusedCardsYBase = playerDeckTop + deckHeight - cardHeight;
-  if (hasOpponent && isRemotePlayerOpponent) {
+  if (judge.matchType in [MatchType.Server, MatchType.Client, MatchType.Observer] && judge.isOneOnOne()) {
     unusedCardsYBase = opponentDeckTop + deckHeight - cardHeight - 30;
     if (judge.state !== GameJudgeState.SelectingCards) {
       unusedCardsYBase = opponentDeckTop + deckHeight - cardHeight;
@@ -982,11 +1060,12 @@ export default function GameTab({
       }
       // check if mouse on any deck card
       let deckPos = canvasPositionToDeckPosition(mouseX, mouseY, [0, 1]);
-      if (judge.opponentType === OpponentType.RemotePlayer && deckPos !== null && deckPos.deckIndex === 1) {
+      if (judge.isServerClientObserverMode() && deckPos !== null && deckPos.deckIndex === 1) {
         deckPos = null; // when there is a remote opponent, cannot move cards from opponent's side.
       }
       if (deckPos !== null) {
-        const cardInfo = judge.getDeck(deckPos.deckIndex, deckPos.cardIndex);
+        const playerIndex = (judge.isClient()) ? (1 - deckPos.deckIndex) : deckPos.deckIndex;
+        const cardInfo = judge.getDeck(playerIndex, deckPos.cardIndex);
         if (cardInfo !== null) {
           // remove from deck
           setJudge(judge.reconstruct());
@@ -1011,7 +1090,8 @@ export default function GameTab({
       // check if mouse is on any deck card on self side.
       const deckPos = canvasPositionToDeckPosition(mouseX, mouseY, [0]);
       if (deckPos !== null) {
-        const cardInfo = judge.getDeck(deckPos.deckIndex, deckPos.cardIndex);
+        const playerIndex = (judge.isClient()) ? (1 - deckPos.deckIndex) : deckPos.deckIndex;
+        const cardInfo = judge.getDeck(playerIndex, deckPos.cardIndex);
         if (cardInfo !== null) {
           setDragInfo({
             dragging: true,
@@ -1055,20 +1135,21 @@ export default function GameTab({
         mouseX,
         mouseY,
         // can drop to opponent deck if there is a opponent and it is not a remote player.
-        (!hasOpponent || isRemotePlayerOpponent) ? [0] : [0, 1]
+        (!showOpponentDeck || judge.isOneOnOne()) ? [0] : [0, 1]
       );
       if (seeAsClick) {
         if (dragInfo.dragType === "fromSelectable") {
           // add to deck at first empty slot
           if (deckPos === null) {
+            const playerIndex = (judge.isClient()) ? 1 : 0;
             for (let i = 0; i < judge.deckRows * judge.deckColumns; i++) {
-              const already = judge.getDeck(0, i);
+              const already = judge.getDeck(playerIndex, i);
               if (already === null) {
                 deckPos = { deckIndex: 0, cardIndex: i };
                 break;
               }
             }
-            if (deckPos === null && hasOpponent && !isRemotePlayerOpponent) {
+            if (deckPos === null && judge.matchType === MatchType.CPU) {
               // can also try to add to opponent deck
               for (let i = 0; i < judge.deckRows * judge.deckColumns; i++) {
                 const already = judge.getDeck(1, i);
@@ -1083,45 +1164,56 @@ export default function GameTab({
           deckPos = null;
         }
       }
+      let fromDeckIndex = 0; let fromPlayerIndex = 0;
+      if (dragInfo.dragType === "fromDeck") {
+        fromDeckIndex = dragInfo.dragFromDeck!.deckIndex;
+        fromPlayerIndex = (judge.isClient()) ? (1 - fromDeckIndex) : fromDeckIndex;
+      }
       if (deckPos !== null) {
         // if from deck, remove first
         if (dragInfo.dragType === "fromDeck") {
-          judge.removeFromDeck(dragInfo.dragFromDeck!.deckIndex, dragInfo.cardInfo, true);
+          judge.removeFromDeck(fromPlayerIndex, dragInfo.dragFromDeck!.cardIndex, sendToAll);
         }
         // check if already have, remove it first
-        const already = judge.getDeck(deckPos.deckIndex, deckPos.cardIndex);
+        const toDeckIndex = deckPos.deckIndex;
+        const toPlayerIndex = (judge.isClient()) ? (1 - toDeckIndex) : toDeckIndex;
+        const already = judge.getDeck(toPlayerIndex, deckPos.cardIndex);
         if (already !== null) {
-          judge.removeFromDeck(deckPos.deckIndex, already, true);
+          judge.removeFromDeck(toPlayerIndex, deckPos.cardIndex, sendToAll);
           if (dragInfo.dragType === "fromDeck") {
             // swap
-            judge.addToDeck(dragInfo.dragFromDeck!.deckIndex, already, dragInfo.dragFromDeck!.cardIndex, true);
+            judge.addToDeck(fromPlayerIndex, already, dragInfo.dragFromDeck!.cardIndex, sendToAll);
           }
         }
         // add to deck
-        judge.addToDeck(deckPos.deckIndex, dragInfo.cardInfo, deckPos.cardIndex, true);
+        judge.addToDeck(toPlayerIndex, dragInfo.cardInfo, deckPos.cardIndex, sendToAll);
         setJudge(judge.reconstruct());
       } else {
         if (dragInfo.dragType === "fromDeck") {
           // remove from deck
-          judge.removeFromDeck(dragInfo.dragFromDeck!.deckIndex, dragInfo.cardInfo, true);
+          judge.removeFromDeck(fromPlayerIndex, dragInfo.dragFromDeck!.cardIndex, sendToAll);
           setJudge(judge.reconstruct());
         }
       }
       setDragInfo(null);
     } else if (judge.state === GameJudgeState.TurnWinnerDetermined) {
       const canDrop = [0];
-      if (judge.givesLeft > 0) {canDrop.push(1);}
+      const canDropToOpponent = (judge.isServer() && judge.givesLeft > 0) || (judge.isClient() && judge.givesLeft < 0);
+      if (canDropToOpponent) {
+        canDrop.push(1);
+      }
       let deckPos = canvasPositionToDeckPosition(
         mouseX,
         mouseY,
         canDrop
       );
-      if (seeAsClick && judge.givesLeft > 0 && (
+      if (seeAsClick && canDropToOpponent && (
         deckPos === null || (deckPos.deckIndex === 0 && deckPos.cardIndex === dragInfo.dragFromDeck!.cardIndex)
       )) {
         // find the first place empty in opponent deck as deckPos
         for (let i = 0; i < judge.deckRows * judge.deckColumns; i++) {
-          const already = judge.getDeck(1, i);
+          const opponentDeckIndex = (judge.isClient()) ? 0 : 1;
+          const already = judge.getDeck(opponentDeckIndex, i);
           if (already === null) {
             deckPos = { deckIndex: 1, cardIndex: i };
             break;
@@ -1130,29 +1222,34 @@ export default function GameTab({
       }
       if (deckPos !== null && deckPos.deckIndex === 1) {
         // if deckpos is not empty, set it to null
-        if (deckPos !== null) {
-          if (judge.getDeck(1, deckPos.cardIndex) !== null) {
-            deckPos = null;
-          }
+        const opponentPlayerIndex = (judge.isClient()) ? 0 : 1;
+        if (judge.getDeck(opponentPlayerIndex, deckPos.cardIndex) !== null) {
+          deckPos = null;
         }
       }
       // put to there
       if (deckPos !== null) {
+        const selfPlayerIndex = (judge.isClient()) ? 1 : 0;
         if (deckPos.deckIndex === 0) {
           // swap self cards
-          const already = judge.getDeck(0, deckPos.cardIndex);
+          const already = judge.getDeck(selfPlayerIndex, deckPos.cardIndex);
+          judge.removeFromDeck(selfPlayerIndex, dragInfo.dragFromDeck!.cardIndex, sendToAll);
           if (already !== null) {
-            judge.removeFromDeck(0, already, true);
-            judge.addToDeck(dragInfo.dragFromDeck!.deckIndex, already, dragInfo.dragFromDeck!.cardIndex, true);
+            judge.removeFromDeck(selfPlayerIndex, deckPos.cardIndex, sendToAll);
+            judge.addToDeck(selfPlayerIndex, already, dragInfo.dragFromDeck!.cardIndex, sendToAll);
           }
-          judge.removeFromDeck(0, dragInfo.cardInfo, true);
-          judge.addToDeck(0, dragInfo.cardInfo, deckPos.cardIndex, true);
+          judge.addToDeck(selfPlayerIndex, dragInfo.cardInfo, deckPos.cardIndex, sendToAll);
         } else {
           // give
-          judge.removeFromDeck(0, dragInfo.cardInfo, true);
-          judge.addToDeck(1, dragInfo.cardInfo, deckPos.cardIndex, true);
-          judge.givesLeft -= 1;
-          sendEvent({ type: "give" });
+          const opponentPlayerIndex = (judge.isClient()) ? 0 : 1;
+          judge.removeFromDeck(selfPlayerIndex, dragInfo.dragFromDeck!.cardIndex, sendToAll);
+          judge.addToDeck(opponentPlayerIndex, dragInfo.cardInfo, deckPos.cardIndex, sendToAll);
+          if (judge.isClient()) {
+            judge.givesLeft += 1;
+          } else {
+            judge.givesLeft -= 1;
+          }
+          judge.sendEvent({ type: "give" }, { send: true, except: null });
         }
         setHoveringCardInfo(null);
         setJudge(judge.reconstruct());
@@ -1176,32 +1273,34 @@ export default function GameTab({
 
   const addDeckRow = () => {
     if (judge.deckRows >= maxDeckRows) return;
-    judge.adjustDeckSize(judge.deckRows + 1, judge.deckColumns, true);
+    judge.adjustDeckSize(judge.deckRows + 1, judge.deckColumns, sendToAll);
     setJudge(judge.reconstruct());
   }
 
   const removeDeckRow = () => {
     if (judge.deckRows <= 1) return;
-    judge.adjustDeckSize(judge.deckRows - 1, judge.deckColumns, true);
+    judge.adjustDeckSize(judge.deckRows - 1, judge.deckColumns, sendToAll);
     setJudge(judge.reconstruct());
   }
 
   const addDeckColumn = () => {
     if (judge.deckColumns >= maxDeckColumns) return;
-    judge.adjustDeckSize(judge.deckRows, judge.deckColumns + 1, true);
+    judge.adjustDeckSize(judge.deckRows, judge.deckColumns + 1, sendToAll);
     setJudge(judge.reconstruct());
   }
 
   const removeDeckColumn = () => {
     if (judge.deckColumns <= 1) return;
-    judge.adjustDeckSize(judge.deckRows, judge.deckColumns - 1, true);
+    judge.adjustDeckSize(judge.deckRows, judge.deckColumns - 1, sendToAll);
     setJudge(judge.reconstruct());
   }
 
   const canStartGame = () => {
     if (judge.state !== GameJudgeState.SelectingCards) return false;
     if (judge.isDeckEmpty(0)) return false;
-    if (hasOpponent && judge.isDeckEmpty(1)) return false;
+    if (judge.isOneOnOne() && judge.isDeckEmpty(1)) return false;
+    const selfPlayerIndex = judge.isClient() ? 1 : 0;
+    if (judge.players[selfPlayerIndex].confirmation.start) return false;
     return true;
   }
 
@@ -1234,7 +1333,7 @@ export default function GameTab({
     const timeout = setTimeout(() => {
       console.log("CPU opponent picking card");
       const judge = judgeRef.current;
-      if (judge.opponentType === OpponentType.CPU && judge.state === GameJudgeState.TurnStart) {
+      if (judge.matchType === MatchType.CPU && judge.state === GameJudgeState.TurnStart) {
         judge.simulateCPUOpponentPick(shouldMistake);
         setJudge(judge.reconstruct());
       }
@@ -1244,7 +1343,7 @@ export default function GameTab({
 
   const handleNextTurnCountdown = () => {
     console.log("Next turn notified");
-    if (judge.opponentType === OpponentType.RemotePlayer) {
+    if (judge.isServerClientObserverMode()) {
       notifyPlayCountdownAudio();
       timerTextStartCountdown();
     }
@@ -1253,12 +1352,12 @@ export default function GameTab({
 
   const handleNextTurnButtonClick = () => {
     if (judge.state === GameJudgeState.TurnWinnerDetermined && judge.givesLeft > 0) {
-      judge.giveCardsRandomly(true);
+      judge.giveCardsRandomly(sendToAll);
       setJudge(judge.reconstruct());
       return;
     }
-    if (judge.opponentType === OpponentType.CPU && judge.givesLeft < 0) {
-      judge.giveCardsRandomly(false);
+    if (judge.matchType === MatchType.CPU && judge.givesLeft < 0) {
+      judge.giveCardsRandomly({send: false, except: null});
     }
     judge.confirmNext(0);
     setJudge(judge.reconstruct());
@@ -1281,7 +1380,7 @@ export default function GameTab({
 
   const notifyTurnStarted = () => {
     timerTextStartRunning();
-    if (judge.opponentType === OpponentType.CPU) {
+    if (judge.matchType === MatchType.CPU) {
       cpuOpponentCountdown();
     }
   }
@@ -1294,15 +1393,15 @@ export default function GameTab({
 
   const handlePlayMusicButtonPressed = () => {
     notifyPlayMusic();
-    sendEvent({ type: "resumeMusic" });
+    judge.sendEvent({ type: "resumeMusic" }, sendToAll);
   }
 
   const handlePauseMusicButtonPressed = () => {
     notifyPauseMusic();
-    sendEvent({ type: "pauseMusic" });
+    judge.sendEvent({ type: "pauseMusic" }, sendToAll);
   }
 
-  const handlePeerError = (error: string) => {
+  const handlePeerError = (_id: number, error: string) => {
     setPeerError(error);
   }
   peer.notifyPeerError = handlePeerError;
@@ -1367,9 +1466,7 @@ export default function GameTab({
           text={GetLocalizedString(Localization.GameFilterByDeck)}
           onClick={() => {
             judge.filterMusicByDeck();
-            if (isRemotePlayerOpponent) {
-              sendEvent({ type: "filterMusicByDeck" });
-            }
+            judge.sendEvent({ type: "filterMusicByDeck" }, sendToAll);
             setJudge(judge.reconstruct());
           }}
           disabled={disabled}
@@ -1386,7 +1483,7 @@ export default function GameTab({
     { // start button
       // region start but
       const isStopGameButton = judge.state !== GameJudgeState.SelectingCards;
-      let disabled = (!isStopGameButton && !canStartGame()) || (isClient && judge.clientWaitAcknowledge);
+      let disabled = (!isStopGameButton && !canStartGame()) || (judge.isClient() && judge.clientWaitAcknowledge);
       const contained = (
         !isStopGameButton &&
         judge.state === GameJudgeState.SelectingCards &&
@@ -1498,10 +1595,10 @@ export default function GameTab({
     { // switch mode button
       const hidden = judge.state !== GameJudgeState.SelectingCards;
       let text = "";
-      if (judge.opponentType === OpponentType.None) { 
+      if (judge.matchType === MatchType.None) { 
         text = GetLocalizedString(Localization.GameOpponentNoOpponent);
       }
-      else if (judge.opponentType === OpponentType.CPU) { 
+      else if (judge.matchType === MatchType.CPU) { 
         text = GetLocalizedString(Localization.GameOpponentCPUOpponent); 
       }
       else {
@@ -1517,23 +1614,23 @@ export default function GameTab({
             position: "absolute", left: `${x}px`, top: `${y}px`,
           }}
           onClick={() => {
-            if (judge.opponentType === OpponentType.None) {
-              judge.opponentType = OpponentType.CPU;
+            if (judge.matchType === MatchType.None) {
+              judge.matchType = MatchType.CPU;
               resetOpponentDeck();
-            } else if (judge.opponentType === OpponentType.CPU) {
-              judge.opponentType = OpponentType.RemotePlayer;
+            } else if (judge.matchType === MatchType.CPU) {
+              judge.matchType = MatchType.RemotePlayer;
               judge.isServer = true;
               peer.ensurePeerNotNull();
               disconnectWebRTCIfAny();
               resetOpponentDeck();
-            } else if (judge.opponentType === OpponentType.RemotePlayer) {
+            } else if (judge.matchType === MatchType.RemotePlayer) {
               if (judge.isServer) {
                 judge.isServer = false;
                 peer.ensurePeerNotNull();
                 disconnectWebRTCIfAny();
                 resetOpponentDeck();
               } else {
-                judge.opponentType = OpponentType.None;
+                judge.matchType = MatchType.None;
                 disconnectWebRTCIfAny();
                 resetOpponentDeck();
               }
@@ -1541,9 +1638,9 @@ export default function GameTab({
             setJudge(judge.reconstruct());
           }}  
         >
-          {judge.opponentType === OpponentType.None && <PersonOffRounded></PersonOffRounded>}
-          {judge.opponentType === OpponentType.CPU && <SmartToyRounded></SmartToyRounded>}
-          {judge.opponentType === OpponentType.RemotePlayer && <GroupsRounded></GroupsRounded>}
+          {judge.matchType === MatchType.None && <PersonOffRounded></PersonOffRounded>}
+          {judge.matchType === MatchType.CPU && <SmartToyRounded></SmartToyRounded>}
+          {judge.matchType === MatchType.RemotePlayer && <GroupsRounded></GroupsRounded>}
         </GameButton>
       );
       if (!hidden) y += buttonSize + canvasSpacing;
@@ -1873,7 +1970,7 @@ export default function GameTab({
 
   { // opponent connection 
     // region op conn
-    if (judge.opponentType === OpponentType.RemotePlayer && !peer.hasDataConnection()) {
+    if (judge.matchType === MatchType.RemotePlayer && !peer.hasDataConnection()) {
       otherElements.push(
         <Paper
           key="opponent-connection-paper"
@@ -2061,7 +2158,7 @@ export default function GameTab({
     const x = deckRight + canvasMargin;
     let y = opponentDeckBottom - buttonSize;
     { // traditional mode button
-      const hidden = judge.state !== GameJudgeState.SelectingCards || judge.opponentType === OpponentType.None;
+      const hidden = judge.state !== GameJudgeState.SelectingCards || judge.matchType === MatchType.None;
       otherElements.push(
         <GameButton
           key="opponent-traditional-mode-button"
@@ -2117,7 +2214,7 @@ export default function GameTab({
       );
     }
     { // shuffle deck for opponent
-      const hidden = judge.state !== GameJudgeState.SelectingCards || judge.opponentType !== OpponentType.CPU;
+      const hidden = judge.state !== GameJudgeState.SelectingCards || judge.matchType !== MatchType.CPU;
       const disabled = judge.deck[1].every((c) => c.characterId === null);
       otherElements.push(
         <GameButton
@@ -2139,7 +2236,7 @@ export default function GameTab({
       y -= buttonSize + canvasSpacing;
     }
     { // clear deck for opponent
-      const hidden = judge.state !== GameJudgeState.SelectingCards || judge.opponentType !== OpponentType.CPU;
+      const hidden = judge.state !== GameJudgeState.SelectingCards || judge.matchType !== MatchType.CPU;
       const disabled = judge.deck[1].every((c) => c.characterId === null);
       otherElements.push(
         <GameButton
@@ -2161,7 +2258,7 @@ export default function GameTab({
       y -= buttonSize + canvasSpacing;
     }
     { // random fill opponent deck
-      const hidden = judge.state !== GameJudgeState.SelectingCards || judge.opponentType !== OpponentType.CPU;
+      const hidden = judge.state !== GameJudgeState.SelectingCards || judge.matchType !== MatchType.CPU;
       const disabled = judge.deck[1].every((c) => c.characterId !== null);
       otherElements.push(
         <GameButton
@@ -2189,7 +2286,7 @@ export default function GameTab({
     let y = opponentDeckTop;
     const shown = (
       judge.state === GameJudgeState.SelectingCards &&
-      judge.opponentType === OpponentType.CPU
+      judge.matchType === MatchType.CPU
     );
     const hidden = !shown;
     {

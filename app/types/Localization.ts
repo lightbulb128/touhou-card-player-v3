@@ -140,7 +140,8 @@ const Localization = {
   ChatMessageSenderSystem: u("System", "系统"),
   ChatMessagePeerConnectionError: u("Connection error", "连接错误"),
   ChatMessageConnected: u("Connected to opponent.", "已连接到对手。"),
-  ChatMessageDisconnected: u("Disconnected from opponent.", "已与对手断开连接。"),
+  ChatMessageClientDisconnected: u("Disconnected from client {clientName}.", "已与客户端 {clientName} 断开连接。"),
+  ChatMessageServerDisconnected: u("Disconnected from server.", "已与服务器断开连接。"),
 
 }
 
