@@ -81,6 +81,10 @@ const Localization = {
     "You need to receive {receives} card{plural} from CPU opponent when moving to next turn.",
     "当你进入下一回合时，你将从电脑对手处接收 {receives} 张卡牌。"
   ),
+  GameInstructionObserverGive: u(
+    "Player {giver} is giving {givesLeft} card{plural} to Player {receiver}.",
+    "玩家 {giver} 需要交出 {givesLeft} 张卡牌给 玩家 {receiver}。"
+  ),
 
   GameConnectShareCodeInstruction: u(
     "Share this code with your friend to let them join your game. If multiple non-observer clients connect, the game will be a melee game. Retry if generation exceeds 10s.",

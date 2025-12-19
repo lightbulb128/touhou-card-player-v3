@@ -626,6 +626,10 @@ export default function GameTab({
           if (changed) {
             judge.players = [judge.players[0], ...newPlayers];
           }
+
+          // reset states
+          judge.resetNonServerState();
+
           judge.broadcastNames();
           setJudge(judge.reconstruct());
           addSystemChatMessage(GetLocalizedString(
@@ -841,7 +845,7 @@ export default function GameTab({
   
   for (let deckIndex = 0; deckIndex < 2; deckIndex++) {
     if (deckIndex === 1 && (isMelee || judge.matchType === MatchType.None)) { continue; }
-    const playerIndex = (judge.isClient() ? 1 - deckIndex : deckIndex) as 0 | 1;
+    const playerIndex = (judge.isServer() ? deckIndex : 1 - deckIndex) as 0 | 1;
     if (judge.players.length <= playerIndex) { continue; }
     const player = judge.players[playerIndex];
     const deck = player.deck;
@@ -870,7 +874,7 @@ export default function GameTab({
     if (playerIndex === 1 && !showOpponentDeck) {
       return;
     }
-    const deckIndex = ((judge.isClient()) ? 1 - playerIndex : playerIndex) as 0 | 1;
+    const deckIndex = (judge.isServer() ? playerIndex : 1 - playerIndex) as 0 | 1;
     deck.forEach((cardInfo, index) => {
       if (cardInfo.characterId !== null) {
         const cardKey = cardInfo.toKey();
@@ -1580,7 +1584,13 @@ export default function GameTab({
   outerRef.current.notifyNextTurnCountdown = handleNextTurnCountdown;
 
   const handleNextTurnButtonClick = () => {
-    if (judge.state === GameJudgeState.TurnWinnerDetermined && judge.givesLeft > 0) {
+    if (
+      judge.state === GameJudgeState.TurnWinnerDetermined 
+      && (
+        ((judge.isServer() || isCPU) && judge.givesLeft > 0) ||
+        (judge.isClient() && judge.givesLeft < 0)
+      )
+    ) {
       judge.giveCardsRandomly(sendToAll);
       setJudge(judge.reconstruct());
       return;
@@ -2179,6 +2189,17 @@ export default function GameTab({
           text = GetLocalizedString(Localization.GameInstructionReceiveCardsCPU, new Map<string, string>([
             ["receives", hasReceiveCount.toString()],
             ["plural", hasReceiveCount > 1 ? "s" : ""],
+          ]));
+        } else if (judge.isObserver()) {
+          const giver = judge.givesLeft > 0 ? judge.players[0].name : judge.players[1].name;
+          const receiver = judge.givesLeft > 0 ? judge.players[1].name : judge.players[0].name;
+          const givesLeft = Math.abs(judge.givesLeft);
+          const plural = givesLeft > 1 ? "s" : "";
+          text = GetLocalizedString(Localization.GameInstructionObserverGive, new Map<string, string>([
+            ["giver", giver],
+            ["receiver", receiver],
+            ["givesLeft", givesLeft.toString()],
+            ["plural", plural],
           ]));
         }
         if (judge.isGameFinished()) {

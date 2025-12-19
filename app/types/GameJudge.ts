@@ -1689,6 +1689,24 @@ class GameJudge {
     }
   }
 
+  resetNonServerState() {
+    const clientCount = this.players.filter(p => !p.isObserver).length - 1;
+    for (let i = 1; i < this.players.length; i++) {
+      this.players[i].deck = [];
+    }
+    if (clientCount === 1) {
+      this.players[1].deck = [];
+      for (let j = 0; j < this.deckRows * this.deckColumns; j++) {
+        this.players[1].deck.push(new CardInfo(null, 0));
+      }
+    }
+    for (let i = 0; i < this.players.length; i++) {
+      this.players[i].collected = [];
+      this.players[i].confirmation.next = false;
+      this.players[i].confirmation.start = false;
+    }
+  }
+
   // this function is used to be passed to the GamePeer object.
   remoteEventListener(sender: number, data: unknown): void {
 
@@ -2042,6 +2060,7 @@ class GameJudge {
             this.players[i].name = e.settings[i].name;
             this.players[i].isObserver = e.settings[i].isObserver;
           }
+          this.resetNonServerState();
           applySyncData(e.syncData);
           this.myPlayerIndex = e.yourIndex;
           this.g().refresh(this);
