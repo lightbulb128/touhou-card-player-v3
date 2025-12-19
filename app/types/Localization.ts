@@ -83,8 +83,8 @@ const Localization = {
   ),
 
   GameConnectShareCodeInstruction: u(
-    "Share this code with your friend to let them join your game. Retry if generation exeeds 10s.",
-    "将此代码分享给你的朋友以让他们加入你的游戏。如果生成时间超过10秒，请点击重试。"
+    "Share this code with your friend to let them join your game. If multiple non-observer clients connect, the game will be a melee game. Retry if generation exceeds 10s.",
+    "将此代码分享给你的朋友以让他们加入你的游戏。如果有多个非观战者客户端连接，游戏将变为混战模式。若生成时间超过10秒请重试。"
   ),
   GameConnectEnterCodeInstruction: u(
     "Enter the share code provided by your friend to join their game:",
@@ -116,6 +116,8 @@ const Localization = {
   ),
   GamePlayer: u("Player", "玩家"),
   GameOpponent: u("Opponent", "对手"),
+  GameObserver: u("Observer", "观察者"),
+  GameObservers: u("Observer{plural}", "观察者"),
 
 
   GameModeTraditional: u("Classic Mode", "传统模式"),
@@ -140,7 +142,9 @@ const Localization = {
   ChatMessageHint: u("Type a message to chat...", "输入消息以聊天..."),
   ChatMessageSenderSystem: u("System", "系统"),
   ChatMessagePeerConnectionError: u("Connection error", "连接错误"),
-  ChatMessageConnected: u("Connected to opponent.", "已连接到对手。"),
+  ChatMessageConnectedToServer: u("Connected to server.", "已连接到服务器。"),
+  ChatMessageConnectedFromClient: u("Client {clientName} connected.", "客户端 {clientName} 已连接。"),
+  ChatMessageConnectedFromObserver: u("Observer {clientName} connected.", "观察者 {clientName} 已连接。"),
   ChatMessageClientDisconnected: u("Disconnected from client {clientName}.", "已与客户端 {clientName} 断开连接。"),
   ChatMessageServerDisconnected: u("Disconnected from server.", "已与服务器断开连接。"),
 

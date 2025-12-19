@@ -76,10 +76,12 @@ type EventAdjustDeckSize = {
 
 type EventConfirmStart = {
   type: "confirmStart";
+  playerIndex: Player;
 };
 
 type EventConfirmNext = {
   type: "confirmNext";
+  playerIndex: Player;
 };
 
 type SyncData = {
@@ -236,7 +238,7 @@ class GamePeer {
   notifyClientConnected: (id: number) => void;
   notifyClientDisconnected: (id: number) => void;
   notifyDisconnectedFromServer: () => void;
-  notifyConnectedToServer: () => void;
+  notifyConnectedToServer: (peer: GamePeer) => void;
   notifyPeerError: (id: number, message: string) => void;
 
   constructor() {
@@ -245,7 +247,6 @@ class GamePeer {
     this.dataConnectionToClients = [];
     this.refresh = () => {};
     this.notifyClientConnected = () => {};
-    this.notifyClientDisconnected = (_id: number) => {};
     this.notifyClientDisconnected = (_id: number) => {};
     this.notifyDisconnectedFromServer = () => {};
     this.notifyConnectedToServer = () => {};
@@ -276,7 +277,7 @@ class GamePeer {
       // connected to server
       if (!this.dataConnectionToServer) {
         this.dataConnectionToServer = dataConnection;
-        this.notifyConnectedToServer();
+        this.notifyConnectedToServer(this);
         this.refresh();
       }
     });
@@ -316,10 +317,10 @@ class GamePeer {
 
         // connection from clients
         conn.on("open", () => {
-          this.notifyClientConnected(this.dataConnectionToClients.length + 1);
           this.dataConnectionToClients.push(new ClientConnection(
             conn, this.dataConnectionToClients.length + 1
           ));
+          this.notifyClientConnected(this.dataConnectionToClients.length);
           this.refresh();
         });
 
@@ -333,8 +334,9 @@ class GamePeer {
             }
           }
           if (index !== -1) {
+            const toRemove = this.dataConnectionToClients[index];
             this.dataConnectionToClients.splice(index, 1);
-            this.notifyClientDisconnected(index);
+            this.notifyClientDisconnected(toRemove.index);
           }
           conn.removeAllListeners("data");
           this.refresh();
@@ -580,6 +582,14 @@ class GameJudge {
     }
   }
 
+  sendEventToServer(event: Event) {
+    if (this.matchType == MatchType.None || this.matchType == MatchType.CPU || this.isServer()) {
+      return;
+    }
+    const peer = this.g().peer;
+    peer.sendEventToServer(event);
+  }
+
   sendServerEventTo(event: Event, to: Player) {
     if (this.matchType == MatchType.None || this.matchType == MatchType.CPU) {
       return;
@@ -593,11 +603,6 @@ class GameJudge {
   }
 
   adjustDeckSize(rows: number, columns: number, sendOpt: SendOption): void {
-
-    if (this.matchType == MatchType.Observer) {
-      console.log("[GameJudge.adjustDeckSize] Observer cannot adjust deck size.");
-      return;
-    }
 
     this.deckRows = rows;
     this.deckColumns = columns;
@@ -757,7 +762,9 @@ class GameJudge {
     if (player === null) {
       if (only01) {
         playersToCheck.push(0);
-        playersToCheck.push(1);
+        if (this.players.length > 1) {
+          playersToCheck.push(1);
+        }
       } else {
         for (let p = 0; p < this.players.length; p++) {
           playersToCheck.push(p);
@@ -970,7 +977,7 @@ class GameJudge {
       player.confirmation.start = false;
     }
 
-    if (this.matchType in [MatchType.None, MatchType.CPU, MatchType.Server]) {
+    if ([MatchType.None, MatchType.CPU, MatchType.Server].includes(this.matchType)) {
 
       // server generates the new order.
       const newPlayingOrder = this._serverStartGame(null); 
@@ -988,6 +995,7 @@ class GameJudge {
           rngSeed: prngseed,
         };
         this.sendEvent(event, {send: true, except: null});
+        this.g().setNextSongPRNGSeed(prngseed);
       }
 
     } else {
@@ -999,6 +1007,9 @@ class GameJudge {
   }
 
   checkAllStartConfirmed(): boolean {
+    if (this.matchType === MatchType.None || this.matchType === MatchType.CPU) {
+      return this.players[0].confirmation.start;
+    }
     for (const player of this.players) {
       if (player.isObserver) { continue; }
       if (!player.confirmation.start) {
@@ -1031,7 +1042,7 @@ class GameJudge {
     }
 
     this.players[player].confirmation.start = true;
-    const event = <EventConfirmStart>{ type: "confirmStart" };
+    const event = <EventConfirmStart>{ type: "confirmStart", playerIndex: player };
     this.sendEvent(event, {send: true, except: null});
 
     if (this.checkAllStartConfirmed()) {
@@ -1068,7 +1079,7 @@ class GameJudge {
     if (
       this.matchType === MatchType.None  // no gives in these modes
       || !this.traditionalMode           // no gives in non-traditional mode
-      || this.players.length > 2         // no gives in melee
+      || this.isMelee()                  // no gives in melee
     ) {
       this.givesLeft = 0; return false;
     }
@@ -1170,7 +1181,7 @@ class GameJudge {
       }
 
       // if on the other side's collected, remove it
-      {
+      if (this.matchType !== MatchType.None && !this.isMelee()) {
         const opponent = winningPickEvent!.player === 0 ? 1 : 0;
         let indexToRemove = -1;
         for (let i = 0; i < this.players[opponent].collected.length; i++) {
@@ -1255,7 +1266,9 @@ class GameJudge {
 
   countdownNextTurn(forceCountDown: boolean = false): void {
     // only use timeout if there is a remote player
-    const needTimeout = this.matchType in [MatchType.Server, MatchType.Client, MatchType.Observer];
+    const needTimeout = [MatchType.Server, MatchType.Client, MatchType.Observer].includes(this.matchType);
+    console.log("this.matchType =", this.matchType);
+    console.log("[GameJudge.countdownNextTurn] needTimeout =", needTimeout, ", forceCountDown =", forceCountDown);
     if (needTimeout || forceCountDown) {
       this.setNextTurnTimeout();
       this.state = GameJudgeState.TurnCountdownNext;
@@ -1281,7 +1294,7 @@ class GameJudge {
       player.confirmation.next = false;
     }
 
-    if (this.matchType in [MatchType.None, MatchType.CPU, MatchType.Server]) {
+    if ([MatchType.None, MatchType.CPU, MatchType.Server].includes(this.matchType)) {
 
       if (this.matchType === MatchType.Server) {
         // send
@@ -1355,6 +1368,7 @@ class GameJudge {
       const currentCharacterId = this.currentCharacterId();
       let correctCardOnSide: Player | null = null;
       for (const player of [0, 1]) {
+        if (player >= this.players.length) { continue; }
         for (let i = 0; i < this.players[player].deck.length; i++) {
           const cardInfo = this.players[player].deck[i];
           if (cardInfo.characterId === currentCharacterId) {
@@ -1376,6 +1390,9 @@ class GameJudge {
   }
 
   checkAllNextConfirmed(): boolean {
+    if (this.matchType === MatchType.None || this.matchType === MatchType.CPU) {
+      return this.players[0].confirmation.next;
+    }
     for (const player of this.players) {
       if (player.isObserver) { continue; }
       if (!player.confirmation.next) {
@@ -1402,7 +1419,7 @@ class GameJudge {
     }
 
     this.players[player].confirmation.next = true;
-    const event = <EventConfirmNext>{ type: "confirmNext" };
+    const event = <EventConfirmNext>{ type: "confirmNext", playerIndex: player };
     this.sendEvent(event, {send: true, except: null});
 
     if (this.checkAllNextConfirmed()) {
@@ -1539,17 +1556,17 @@ class GameJudge {
   }
 
   isMusicFilteredByDeck(): boolean {
-    // check all cards that is not inside deck is disabled in temporary
+    // check all cards that are not inside deck are disabled in temporary
     const playingOrder = this.playingOrder();
     const characterTemporaryDisabled = this.characterTemporaryDisabled();
     const inDeck = new Set<CharacterId>();
-    for (const player of [0, 1]) {
-      for (const cardInfo of this.players[player].deck) {
+    for (const player of this.players) {
+      for (const cardInfo of player.deck) {
         if (cardInfo.characterId !== null) {
           inDeck.add(cardInfo.characterId);
         }
       }
-      for (const cardInfo of this.players[player].collected) {
+      for (const cardInfo of player.collected) {
         if (cardInfo.characterId !== null) {
           inDeck.add(cardInfo.characterId);
         }
@@ -1570,6 +1587,7 @@ class GameJudge {
     const playingOrder = this.playingOrder();
     const inDeck = new Set<CharacterId>();
     for (const player of [0, 1]) {
+      if (player >= this.players.length) { continue; }
       for (const cardInfo of this.players[player].deck) {
         if (cardInfo.characterId !== null) {
           inDeck.add(cardInfo.characterId);
@@ -1610,14 +1628,13 @@ class GameJudge {
     }
     this.players.splice(id, 1);
     // after removing, broadcast names again
-    this.broadcastNames();
     this.g().refresh(this);
   }
 
-  addPlayer(): void {
+  addPlayer(name: string = "New Observer", fillDeck: boolean = false): void {
     // add a observer player
     this.players.push({
-      name: `New Observer`,
+      name: name,
       isObserver: true,
       deck: [],
       collected: [],
@@ -1626,8 +1643,11 @@ class GameJudge {
         next: false,
       },
     });
-    // after adding, broadcast names again
-    this.broadcastNames();
+    if (fillDeck) {
+      for (let j = 0; j < this.deckRows * this.deckColumns; j++) {
+        this.players[this.players.length - 1].deck.push(new CardInfo(null, 0));
+      }
+    }
     this.g().refresh(this);
   }
 
@@ -1678,7 +1698,15 @@ class GameJudge {
       this.deckRows = data.deckRows;
       this.deckColumns = data.deckColumns;
       this.turnWinner = data.turnWinner;
-      this.pickEvents = data.pickEvents;
+      this.pickEvents = [];
+      for (const event of data.pickEvents) {
+        this.pickEvents.push(new PickEvent(
+          event.timestamp,
+          event.player,
+          new CardInfo(event.cardInfo.characterId, event.cardInfo.cardIndex),
+          event.deckPosition
+        ));
+      }
       // set deck and collected
       for (let i = 0; i < this.players.length; i++) {
         const player = this.players[i];
@@ -1778,7 +1806,7 @@ class GameJudge {
 
     const event = JSON.parse(data as string) as Event;
 
-    console.log("[GameJudge] Received event:", event);
+    console.log(sender, "=>", event);
 
     switch (event.type) {
 
@@ -1823,7 +1851,7 @@ class GameJudge {
 
       case "confirmStart": {
 
-        this.players[sender].confirmation.start = true;
+        this.players[event.playerIndex].confirmation.start = true;
 
         if (this.matchType === MatchType.Server) {
           // broadcast
@@ -1838,7 +1866,7 @@ class GameJudge {
       }
       case "confirmNext": {
 
-        this.players[sender].confirmation.next = true;
+        this.players[event.playerIndex].confirmation.next = true;
 
         if (this.matchType === MatchType.Server) {
           // broadcast
@@ -1937,6 +1965,7 @@ class GameJudge {
           if (this.givesLeft > 0) { 
             this.givesLeft -= 1; // an event directly sent by the server
           }
+          this.g().refresh(this);
         }
         break;
       }
@@ -1948,6 +1977,11 @@ class GameJudge {
         this.deckRows = e.deckRows;
         this.deckColumns = e.deckColumns;
         this.resetGameState();
+        this.sendEventToServer({
+          type: "notifyName",
+          name: this.players[this.myPlayerIndex].name,
+          isObserver: this.matchType === MatchType.Observer,
+        });
         this.g().refresh(this);
         break;
       }
@@ -2050,5 +2084,5 @@ export type {
   EventSyncWinnerDetermined, EventSyncStart,
   EventSyncNextTurn, EventStopGame,
   EventSwitchTraditionalMode,
-  EventGive, SendOption, PlayerInfo,
+  EventGive, SendOption, PlayerInfo, EventChat, ClientConnection
 }
