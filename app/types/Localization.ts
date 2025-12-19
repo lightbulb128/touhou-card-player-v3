@@ -61,6 +61,7 @@ const Localization = {
   GameOpponentCPUOpponent: u("CPU Opponent", "电脑对手"),
   GameOpponentRemoteAsServer: u("PvP (as Server)", "玩家对战（作为服务器）"),
   GameOpponentRemoteAsClient: u("PvP (as Client)", "玩家对战（作为客户端）"),
+  GameOpponentRemoteAsObserver: u("PvP (as Observer)", "玩家对战（作为观察者）"),
 
   GameNextTurnOpponentWaiting: u("opponent waiting...", "对手等待中..."),
   GameNextTurnWaitingForOpponent: u("waiting for opponent...", "等待对手..."),

@@ -1452,16 +1452,15 @@ class GameJudge {
     this.sendEvent({ type: "stopGame" }, { send: true, except: null });
   }
 
-  isOneOnOne(): boolean {
-    // opponent is cpu, or there is only one client that is not observer
-    if (this.matchType === MatchType.CPU) { return true; }
+  isMelee(): boolean {
+    // more than two active players
     let activePlayerCount = 0;
     for (const player of this.players) {
       if (!player.isObserver) {
         activePlayerCount += 1;
       }
     }
-    return activePlayerCount <= 2;
+    return activePlayerCount > 2;
   }
 
   resetGameState() {
@@ -1475,6 +1474,7 @@ class GameJudge {
     this.pickEvents = [];
     this.givesLeft = 0;
     this.clientWaitAcknowledge = false;
+    const isMelee = this.isMelee();
     for (let i = 0; i < this.players.length; i++) {
       const player = this.players[i];
       // reset all confirmations
@@ -1482,7 +1482,7 @@ class GameJudge {
       player.confirmation.next = false;
       // clear collected
       player.collected = [];
-      const hasDeck = (i == 0) || (!player.isObserver && this.isOneOnOne());
+      const hasDeck = (i == 0) || (i == 1 && !isMelee);
       player.deck = [];
       if (hasDeck) {
         for (let j = 0; j < this.deckRows * this.deckColumns; j++) {
