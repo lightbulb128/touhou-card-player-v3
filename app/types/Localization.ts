@@ -115,8 +115,16 @@ const Localization = {
     "连接"
   ),
   GameConnectionMyName: u(
-    "Your name to display to the opponent:",
-    "向对方展示的你的名称："
+    "Your name to display to other player(s):",
+    "向其他玩家展示的你的名称："
+  ),
+  GameConnectAsObserver: u(
+    "Switch to Observer",
+    "切换为观察者"
+  ),
+  GameConnectAsClient: u(
+    "Switch to Client Player",
+    "切换为客户端玩家"
   ),
   GamePlayer: u("Player", "玩家"),
   GameOpponent: u("Opponent", "对手"),

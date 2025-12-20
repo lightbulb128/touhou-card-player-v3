@@ -2413,16 +2413,41 @@ export default function GameTab({
                 setRemotePlayerIdInput(e.target.value);
               }}
             />
-            {!judge.isServer()  && <Button
-              onClick={() => {
-                peer.connectToServer(remotePlayerIdInput);
-              }}
-              sx={{fontFamily: NoFontFamily}}
-              variant="outlined"
+            {!judge.isServer() && <Stack
+              direction="row"
+              spacing={1}
             >
-              {GetLocalizedString(Localization.GameConnectionConnect)}
-            </Button>}
-            {judge.isServer()  && <Stack
+              <Button
+                onClick={() => {
+                  peer.connectToServer(remotePlayerIdInput);
+                }}
+                sx={{fontFamily: NoFontFamily}}
+                variant="outlined"
+                color="success"
+              >
+                {GetLocalizedString(Localization.GameConnectionConnect)}
+              </Button>
+              <Button
+                onClick={() => {
+                  if (judge.matchType === MatchType.Client) {
+                    judge.matchType = MatchType.Observer;
+                    peer.ensurePeerNotNull();
+                    disconnectWebRTCIfAny();
+                    resetOpponentDeck();
+                  } else {
+                    judge.matchType = MatchType.Client;
+                    peer.ensurePeerNotNull();
+                    disconnectWebRTCIfAny();
+                    resetOpponentDeck();
+                  }
+                }}
+                sx={{fontFamily: NoFontFamily}}
+                variant="outlined"
+              >
+                {judge.matchType === MatchType.Client ? GetLocalizedString(Localization.GameConnectAsObserver) : GetLocalizedString(Localization.GameConnectAsClient)}
+              </Button>
+            </Stack>}
+            {judge.isServer() && <Stack
               direction="row"
               spacing={1}
             >
