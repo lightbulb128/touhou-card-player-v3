@@ -33,7 +33,7 @@ Touhou Cards V3 is a browser-based deck experience that mixes visual flair with 
 - **Single practice**: Solo sandbox with instant resets for testing lineups.
 - **CPU opponent**: Battle an automated rival to keep skills sharp offline.
 - **Remote opponent (WebRTC via PeerJS)**:
-  - One player acts as server, sharing a join code for another player to connect.
+  - One player acts as server, sharing a join code for other players (can be 1 opponent for 1v1 or multiple for a melee mode!) to connect.
 	- Settings sync automatically on connection and again when the game begins.
 	- Set your display name so friends can find you in the lobby list.
 	- Card handoffs are resilient, ensuring transfers finish even on unstable links.
