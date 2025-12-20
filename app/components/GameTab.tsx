@@ -164,6 +164,7 @@ export default function GameTab({
   });
   const [judge, setJudge] = useState<GameJudge>(new GameJudge(outerRef));
   const judgeRef = useRef<GameJudge>(judge);
+  const [myName, setMyName] = useState<string>("Player");
   const [cardWidthPercentage, setCardWidthPercentage] = useState<number>(0.08);
   const [cardSelectionSliderValue, setCardSelectionSliderValue] = useState<number>(0);
   const [unusedCards, setUnusedCards] = useState<CardInfo[]>([]);
@@ -390,8 +391,7 @@ export default function GameTab({
       deckColumns: judge.deckColumns,
       deckRows: judge.deckRows,
     }, id)
-    judge.resetGameState();
-    // add a observer player
+    // judge.resetGameState();
     setJudge(judge.reconstruct());
   }
 
@@ -536,6 +536,7 @@ export default function GameTab({
 
   const resetOpponentDeck = () => {
     judge.players = [judge.players[0]];
+    judge.players[0].name = myName;
 
     if (judge.matchType === MatchType.CPU) {
       judge.addCPUPlayer();
@@ -673,6 +674,11 @@ export default function GameTab({
 
           // reset states
           judge.resetNonServerState();
+          judge.stopGame();
+          judge.state = GameJudgeState.SelectingCards;
+          setDragInfo(null);
+          setHoveringCardInfo(null);
+          notifyGameEnd();
 
           judge.broadcastNames();
           setJudge(judge.reconstruct());
@@ -836,6 +842,7 @@ export default function GameTab({
     const storedName = localStorage.getItem("myName");
     if (storedName && storedName.length > 0 && storedName !== "Player") {
       judge.players[0].name = storedName;
+      setMyName(storedName);
       setJudge(judge => judge.reconstruct());
     }
     // load game setting from local storage
@@ -1368,7 +1375,7 @@ export default function GameTab({
         deckPos = null; // when there is a remote opponent, cannot move cards from opponent's side.
       }
       if (deckPos !== null) {
-        const playerIndex = (judge.isClient()) ? (1 - deckPos.deckIndex) : deckPos.deckIndex;
+        const playerIndex = (judge.isServer() || isCPU || isNoOpponent || isMelee) ? deckPos.deckIndex : (1 - deckPos.deckIndex);
         const cardInfo = judge.getDeck(playerIndex, deckPos.cardIndex);
         if (cardInfo !== null) {
           // remove from deck
@@ -2380,9 +2387,10 @@ export default function GameTab({
               slotProps={{
                 input: { style: { fontFamily: NoFontFamily } }
               }}
-              value={judge.players[judge.isServer() ? 0 : 1].name}
+              value={myName}
               onChange={(e) => {
                 localStorage.setItem("myName", e.target.value);
+                setMyName(e.target.value);
                 judge.players[judge.isServer() ? 0 : 1].name = e.target.value;
                 setJudge(judge.reconstruct());
               }}

@@ -189,6 +189,7 @@ type EventBroadcastPlayerNames = {
   }>;
   yourIndex: number;
   syncData: SyncData;
+  state: GameJudgeState
 }
 
 type EventClearDeck = {
@@ -904,15 +905,17 @@ class GameJudge {
   }
 
   isGameFinished(): boolean {
-    if (this.matchType === MatchType.None || this.players.length !== 2) {
+    const isMelee = this.isMelee();
+    if (this.matchType === MatchType.None || isMelee) {
       return this.isDeckEmpty(0);
     }
+    if (this.givesLeft !== 0) { return false; }
     if (this.traditionalMode) {
       // check if someone has deck empty
-      return this.givesLeft === 0 && (this.isDeckEmpty(0) || this.isDeckEmpty(1));
+      return this.isDeckEmpty(0) || (this.players.length >= 2 && this.isDeckEmpty(1));
     } else {
       // check if all deck is empty
-      return this.isDeckEmpty(0) && this.isDeckEmpty(1);
+      return this.isDeckEmpty(0) && (this.players.length >= 2 && this.isDeckEmpty(1));
     }
   }
 
@@ -1614,6 +1617,7 @@ class GameJudge {
         settings: settings,
         syncData: syncData,
         yourIndex: i,
+        state: this.state,
       }, i);
     }
   }
@@ -1687,6 +1691,7 @@ class GameJudge {
   }
 
   resetNonServerState() {
+    this.state = GameJudgeState.SelectingCards;
     const clientCount = this.players.filter(p => !p.isObserver).length - 1;
     for (let i = 1; i < this.players.length; i++) {
       this.players[i].deck = [];
@@ -2018,6 +2023,12 @@ class GameJudge {
         const e = event as EventNotifyName;
         this.players[sender].name = e.name;
         this.players[sender].isObserver = e.isObserver;
+        // reset all confirmations
+        for (const player of this.players) {
+          player.confirmation.start = false;
+          player.confirmation.next = false;
+        }
+        this.g().refresh(this);
         break;
       }
 
@@ -2057,9 +2068,18 @@ class GameJudge {
             this.players[i].name = e.settings[i].name;
             this.players[i].isObserver = e.settings[i].isObserver;
           }
-          this.resetNonServerState();
+          // this.resetNonServerState();
           applySyncData(e.syncData);
+          if (this.state !== GameJudgeState.SelectingCards && e.state === GameJudgeState.SelectingCards) {
+            this.g().notifyStopGame();
+          }
+          this.state = e.state;
           this.myPlayerIndex = e.yourIndex;
+          // reset all confirmations
+          for (const player of this.players) {
+            player.confirmation.start = false;
+            player.confirmation.next = false;
+          }
           this.g().refresh(this);
         }
         break;
