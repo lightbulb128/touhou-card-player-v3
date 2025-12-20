@@ -2029,6 +2029,7 @@ export default function GameTab({
           hidden={hidden}
           sx={{ 
             position: "absolute", left: `${x}px`, top: `${y}px`, 
+            zIndex: 1000,
           }}
         >
           <AddRounded></AddRounded>
@@ -2046,6 +2047,7 @@ export default function GameTab({
           hidden={hidden}
           sx={{ 
             position: "absolute", left: `${x}px`, top: `${y}px`, 
+            zIndex: 1000,
           }}
         >
           <RemoveRounded></RemoveRounded>
