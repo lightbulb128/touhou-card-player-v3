@@ -537,15 +537,6 @@ export default function GameTab({
   const resetOpponentDeck = () => {
     judge.players = [judge.players[0]];
 
-    // TODO: This is for debug use. remove this.
-    if (judge.matchType === MatchType.Server) {
-      judge.players[0].name = "Alice"
-    } else if (judge.matchType === MatchType.Client) {
-      judge.players[0].name = "Bob"
-    } else if (judge.matchType === MatchType.Observer) {
-      judge.players[0].name = "Observer"
-    }
-
     if (judge.matchType === MatchType.CPU) {
       judge.addCPUPlayer();
     }
@@ -2211,7 +2202,6 @@ export default function GameTab({
       const hasGiveCount = hasGives ? Math.abs(judge.givesLeft) : 0;
       const hasReceives = (judge.givesLeft < 0 && (judge.isServer() || isCPU)) || (judge.givesLeft > 0 && judge.isClient());
       const hasReceiveCount = hasReceives ? Math.abs(judge.givesLeft) : 0;
-      // TODO: observer
       if (judge.state === GameJudgeState.TurnWinnerDetermined && hasGives) {
         text = GetLocalizedString(Localization.GameNextTurnGiveCards, new Map<string, string>([
           ["givesLeft", hasGiveCount.toString()],
