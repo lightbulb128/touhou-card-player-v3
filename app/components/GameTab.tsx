@@ -1680,6 +1680,8 @@ export default function GameTab({
     }
     if (judge.matchType === MatchType.CPU && judge.givesLeft < 0) {
       judge.giveCardsRandomly({send: false, except: null});
+      setJudge(judge.reconstruct());
+      return;
     }
     judge.confirmNext(judge.myPlayerIndex);
     setJudge(judge.reconstruct());
