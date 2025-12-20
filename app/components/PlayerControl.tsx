@@ -8,6 +8,7 @@ import {
   VolumeDownRounded as VolumeDown, VolumeUpRounded as VolumeUp
 } from "@mui/icons-material";
 import { MonospaceFontFamily } from "./Theme";
+import { cheatSanitize } from "../types/Cheat";
 
 export interface PlayerControlProps {
   showSlider?: boolean;
@@ -82,7 +83,7 @@ export default function PlayerControl({
   }
   return <Stack direction="column" spacing={1} alignItems="center" width="100%" justifyContent="center">
     <Stack direction="row" spacing={3} alignItems="center" width="100%" justifyContent="center">
-      <Typography fontFamily={MonospaceFontFamily}>{formatTime(playback.currentTime)}</Typography>
+      <Typography fontFamily={MonospaceFontFamily}>{cheatSanitize(formatTime(playback.currentTime))}</Typography>
       <Slider value={playback.currentTime} 
         min={0} max={playback.duration} 
         sx={{ width: "clamp(0px, 40%, 300px)" }}
@@ -93,7 +94,7 @@ export default function PlayerControl({
           }
         }}
       />
-      <Typography fontFamily={MonospaceFontFamily}>{formatTime(playback.duration)}</Typography>
+      <Typography fontFamily={MonospaceFontFamily}>{cheatSanitize(formatTime(playback.duration))}</Typography>
     </Stack>
     <Stack direction="row" spacing={3} alignItems="center" width="100%" justifyContent="center">
       <VolumeDown></VolumeDown>

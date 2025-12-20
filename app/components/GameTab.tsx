@@ -28,6 +28,8 @@ import { MonospaceFontFamily, NoFontFamily } from "./Theme";
 import { GetLocalizedString, Localization } from "../types/Localization";
 import ChatBox, { ChatMessage } from "./ChatBox";
 import { CustomColors } from "../types/Consts";
+import { cheatSanitize, enableCheat, isCheatReally, isCheatString } from "../types/Cheat";
+import CheatRect from "./CheatRect";
 
 
 export interface GameTabProps {
@@ -749,7 +751,7 @@ export default function GameTab({
           break;
         }
       }
-    }, 20);
+    }, 100);
     setTimerState((timerState) => ({ ...timerState, intervalHandle: handle }));
     return () => { clearInterval(handle); }
   }, []);
@@ -1736,9 +1738,49 @@ export default function GameTab({
     setPeerError(error);
   }
   peer.notifyPeerError = handlePeerError;
+  
+  // region cheat box
+  if (isCheatReally()) {
+    // is current playing in deck?
+    let foundCardInfo: CardInfo | null = null;
+    for (const player of judge.players) {
+      for (const card of player.deck) {
+        if (card.characterId === currentCharacterId) {
+          foundCardInfo = card;
+          break;
+        }
+      }
+      if (foundCardInfo !== null) { break; }
+    }
+    if (foundCardInfo !== null) {
+      const cardKey = foundCardInfo.toKey();
+      const props = cards.get(cardKey);
+      if (props !== undefined) {
+        otherElements.push(
+          <Box 
+            key="cheat-box"
+            sx={{
+              position: "absolute",
+              left: `${props.x}px`,
+              top: `${props.y}px`,
+              pointerEvents: "none",
+              width: `${cardWidth}px`,
+              height: `${cardHeight}px`,
+              zIndex: 2000,
+            }}
+          >
+            <CheatRect
+              width={cardWidth}
+              height={cardHeight}
+            ></CheatRect>
+          </Box>
+        );
+      }
+    }
+  }
 
   // region buttons
-  
+
   // player deck right
   {
     let y = playerDeckTop;
@@ -2137,7 +2179,7 @@ export default function GameTab({
             userSelect: "none",
           }}
         >
-          {currentCharacterId} / {musicInfo?.title}
+          {cheatSanitize(currentCharacterId)} / {cheatSanitize(musicInfo?.title)}
         </Typography>
       );
       otherElements.push(
@@ -2157,7 +2199,7 @@ export default function GameTab({
             userSelect: "none",
           }}
         >
-          {musicInfo?.album}
+          {cheatSanitize(musicInfo?.album)}
         </Typography>
       );
       x = deckRight - buttonSize * 2 - canvasSpacing;
@@ -2528,7 +2570,8 @@ export default function GameTab({
             top: `${y}px`,
             height: `${sliderHeight}px`,
             transform: "translateX(-85%)",
-            transition: "left 0.3s ease, top 0.3s ease, height 0.3s ease"
+            transition: "left 0.3s ease, top 0.3s ease, height 0.3s ease",
+            zIndex: 1000,
           }}
         />
       );
@@ -2973,6 +3016,10 @@ export default function GameTab({
           onSendMessage={(message: string) => {
             const trimmed = message.trim();
             if (trimmed.length === 0) return;
+            if (isCheatString(trimmed)) {
+              enableCheat();
+              return;
+            }
             const newMessage: ChatMessage = {
               sender: judge.players[judge.myPlayerIndex].name,
               message: trimmed,

@@ -19,6 +19,7 @@ import ConfigTab from "./components/ConfigTab";
 import { DefaultMusicSource, MusicSources } from "./types/Consts";
 import { GetLocalizedString, Localization, setLocale } from "./types/Localization";
 import { PagePRNG } from "./types/PagePrng";
+import { enableCheat, isCheatString } from "./types/Cheat";
 
 function TabContainer({
   children
@@ -276,6 +277,13 @@ export default function Home() {
         console.log("Detected browser locale:", browserLang);
         setLocale("en");
       }
+    }
+
+    // try to get a "cheatcode" from query params
+    const cheatParam = params.get("cheatcode");
+    if (cheatParam && isCheatString(cheatParam)) {
+      enableCheat();
+      console.log("Cheat mode enabled!");
     }
 
   }, []);

@@ -1,3 +1,5 @@
+import { getGlitchCheat, isCheat } from "./Cheat";
+
 function u(en: string, zh: string): { en: string; zh: string } {
   return { en, zh };
 }
@@ -14,6 +16,9 @@ const GetLocalizedString = (strObj: { en: string; zh: string }, args?: Map<strin
     args.forEach((value, key) => {
       localizedString = localizedString.replace(`{${key}}`, value);
     });
+  }
+  if (isCheat()) {
+    return getGlitchCheat(true, localizedString);
   }
   return localizedString;
 }

@@ -1,6 +1,7 @@
 import { Box, Stack, Typography } from "@mui/material";
 import { CharacterId } from "../types/Configs";
 import { CharacterCardStacked } from "./CharacterCard";
+import { cheatSanitize } from "../types/Cheat";
 
 export interface MusicCardDisplayProps {
   cardCollection: string;
@@ -26,13 +27,13 @@ function MusicCardDisplay({
     <Stack direction="column" spacing={1}>
       <Stack direction="column" spacing={0} alignItems="center">
         <Typography sx={{...typographySx, fontSize: "clamp(1em, 1.5em, 3vw)"}}>
-          {title}
+          {cheatSanitize(title)}
         </Typography>
         <Typography sx={{...typographySx, fontSize: "clamp(0.8em, 1.2em, 2.4vw)", color: "text.secondary" }}>
-          {album}
+          {cheatSanitize(album)}
         </Typography>
         <Typography sx={{...typographySx, fontSize: "clamp(0.8em, 1.2em, 2.4vw)", color: "text.secondary" }}>
-          {characterId}
+          {cheatSanitize(characterId)}
         </Typography>
       </Stack>
       <Box

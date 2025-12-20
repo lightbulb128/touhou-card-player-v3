@@ -5,6 +5,7 @@ import {
 } from "../types/Configs";
 import {theme} from "./Theme";
 import PlayerControl from "./PlayerControl";
+import { cheatSanitize } from "../types/Cheat";
 
 export interface ListTabProps {
   data: GlobalData;
@@ -38,13 +39,13 @@ export default function ListTab(props: ListTabProps) {
     <Stack direction="column" spacing={1}>
       <Stack direction="column" spacing={0} alignItems="center">
         <Typography sx={{...typographySx, fontSize: "clamp(1em, 1.5em, 3vw)"}}>
-          {currentMusicInfo ? currentMusicInfo.title : "No Music Selected"}
+          {cheatSanitize(currentMusicInfo ? currentMusicInfo.title : "No Music Selected")}
         </Typography>
         <Typography sx={{...typographySx, fontSize: "clamp(0.8em, 1.2em, 2.4vw)", color: "text.secondary" }}>
-          {currentMusicInfo ? currentMusicInfo.album : ""}
+          {cheatSanitize(currentMusicInfo ? currentMusicInfo.album : "")}
         </Typography>
         <Typography sx={{...typographySx, fontSize: "clamp(0.8em, 1.2em, 2.4vw)", color: "text.secondary" }}>
-          {props.currentCharacterId}
+          {cheatSanitize(props.currentCharacterId)}
         </Typography>
       </Stack>
       <PlayerControl 
@@ -111,7 +112,7 @@ export default function ListTab(props: ListTabProps) {
                   whiteSpace: "nowrap",
                 }}
               >
-                {charId} ({musicInfo.title})
+                {cheatSanitize(charId)} ({cheatSanitize(musicInfo.title)})
               </Typography>
             </Box>
           )

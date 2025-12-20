@@ -14,6 +14,7 @@ import {
 import { NoFontFamily } from "./Theme";
 import { GetLocalizedString, Localization } from "../types/Localization";
 import Link from "next/link";
+import { cheatSanitize, isCheat } from "../types/Cheat";
 
 interface ConfigDrawerProps {
   title: string;
@@ -227,7 +228,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                   <Grid container spacing={1} width="100%">
                     <Grid size={8} sx={{display: "flex", alignItems: "center"}}>
                       <Typography variant="body2">
-                        {key}
+                        {cheatSanitize(key)}
                       </Typography>
                     </Grid>
                     <Grid size={4} sx={{display: "flex", justifyContent: "flex-end", alignItems: "center"}}>
@@ -252,7 +253,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                     </Grid>
                     <Grid size={6}>
                       <Typography variant="body2" color="textSecondary">
-                        {element}
+                        {!isCheat() ? element : cheatSanitize("Whatever")}
                       </Typography>
                     </Grid>
                     <Grid size={6}>
@@ -287,7 +288,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                   <Grid container spacing={1} width="100%">
                     <Grid size={8} sx={{display: "flex", alignItems: "center"}}>
                       <Typography variant="body1">
-                        {key}
+                        {cheatSanitize(key)}
                       </Typography>
                     </Grid>
                     <Grid size={4} sx={{display: "flex", justifyContent: "flex-end", alignItems: "center"}}>
@@ -321,7 +322,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                     </Grid>
                     <Grid size={12}>
                       <Typography variant="body2" color="textSecondary">
-                        {description}
+                        {cheatSanitize(description)}
                       </Typography>
                     </Grid>
                     {musicSourceKey === key &&
@@ -348,7 +349,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
                             }}>
-                              {GetLocalizedString(Localization.ConfigTabMusicSourceExample)}
+                              {cheatSanitize(GetLocalizedString(Localization.ConfigTabMusicSourceExample))}
                             </Typography>
                             <Link href={exampleMusicSrc} target="_blank" rel="noopener noreferrer">
                               <Typography variant="body2" color="textSecondary" fontSize="small" sx={{
@@ -357,7 +358,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                                 whiteSpace: "nowrap",
                                 "&:hover": { textDecoration: "underline" }
                               }}>
-                                {exampleCharacterId} / {exampleMusicInfo?.title} ({exampleMusicInfo?.album})
+                                {cheatSanitize(exampleCharacterId)} / {cheatSanitize(exampleMusicInfo?.title)} ({cheatSanitize(exampleMusicInfo?.album)})
                               </Typography>
                             </Link>
                           </Stack>
@@ -416,7 +417,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                     <Grid size={8} sx={{display: "flex", alignItems: "center"}}>
                       <Typography variant="body2" sx={{display: "flex", alignItems: "center", gap: 0.5}} fontFamily={NoFontFamily}>
                         {icon}
-                        {name}
+                        {cheatSanitize(name)}
                       </Typography>
                     </Grid>
                     <Grid size={4} sx={{display: "flex", justifyContent: "flex-end", alignItems: "center"}}>
@@ -458,7 +459,7 @@ export default function ConfigTab(props: ConfigTabProps) {
                               {icon}
                             </Typography>
                             <Typography variant="body2" color="textSecondary">
-                              {charId} {"⇒"} {musicName}
+                              {cheatSanitize(charId)} {"⇒"} {cheatSanitize(musicName)}
                             </Typography>
                           </Stack>
                         );

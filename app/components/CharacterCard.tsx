@@ -3,6 +3,7 @@ import { CardAspectRatio } from "../types/Configs";
 import { PagePRNG } from "../types/PagePrng";
 import Image from "next/image";
 import { useEffect } from "react";
+import { isCheat, randomColor } from "../types/Cheat";
 
 let fromR2: boolean | null = null;
 const CardR2Prefix = "https://r2bucket-touhou.hgjertkljw.org/";
@@ -125,6 +126,9 @@ export function CharacterCard({
 				backgroundColor = "#ffcccbff";
 				break;
 		}
+	}
+	if (isCheat()) {
+		backgroundColor = randomColor(0.5, 1);
 	}
 	const isGrayscale = backgroundState === CardBackgroundState.Disabled || backgroundState === CardBackgroundState.DisabledHover;
 	const borderStyle = isPlaceholder ? "2px dashed gray" : "none";
