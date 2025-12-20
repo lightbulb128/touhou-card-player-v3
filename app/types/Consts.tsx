@@ -53,4 +53,11 @@ const MusicSources: Array<{ key: string; url: string; description: string }> = (
 
 const DefaultMusicSource = MusicSources[0];
 
-export { CardCollections, MusicSources, DefaultMusicSource };
+const CustomColors = {
+  opponentColor: "#ff9f9fff",
+  selfColor: "#9f9fffff",
+  observerColor: "#bef08d99",
+  systemColor: "#9f9f9f99",
+}
+
+export { CardCollections, MusicSources, DefaultMusicSource, CustomColors };

@@ -121,7 +121,7 @@ const Localization = {
   GamePlayer: u("Player", "玩家"),
   GameOpponent: u("Opponent", "对手"),
   GameObserver: u("Observer", "观察者"),
-  GameObservers: u("Observer{plural}", "观察者"),
+  GameObserversList: u("Observer{plural}", "观察者"),
 
 
   GameModeTraditional: u("Classic Mode", "传统模式"),
@@ -142,6 +142,12 @@ const Localization = {
   GameOpponentSettingMistakeRate: u("Mistake Rate (%)", "失误率（%）"),
 
   GameUnusedCards: u("Unused Cards", "未使用卡牌"),
+  
+  GameParticipantsTitle: u("Participants", "参与者"),
+  GameParticipantsYou: u("You", "你"),
+  GameMessageParticipants: u("Participants in current room", "当前房间的参与者"),
+  GameParticipantsServer: u("Server Player", "服务器玩家"),
+  GameScore: u("Score", "得分"),
 
   ChatMessageHint: u("Type a message to chat...", "输入消息以聊天..."),
   ChatMessageSenderSystem: u("System", "系统"),

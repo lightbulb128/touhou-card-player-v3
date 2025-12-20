@@ -27,6 +27,7 @@ import { GameButton } from "./GameTabControls";
 import { MonospaceFontFamily, NoFontFamily } from "./Theme";
 import { GetLocalizedString, Localization } from "../types/Localization";
 import ChatBox, { ChatMessage } from "./ChatBox";
+import { CustomColors } from "../types/Consts";
 
 
 export interface GameTabProps {
@@ -205,6 +206,7 @@ export default function GameTab({
   const isMelee = judge.isMelee();
   const isCPU = judge.matchType === MatchType.CPU;
   const isServerClientObserver = judge.isServerClientObserverMode();
+  const isNoOpponent = judge.matchType === MatchType.None;
   const is1v1 = (isCPU) || (isServerClientObserver && !isMelee);
   const isSelectingCards = judge.state === GameJudgeState.SelectingCards;
 
@@ -221,8 +223,9 @@ export default function GameTab({
   const deckRight = deckLeft + deckWidth;
 
   const showPlayerName = !(judge.matchType === MatchType.None || judge.matchType === MatchType.CPU);
+  const showOpponentName = showPlayerName && !(judge.isObserver() && isMelee) && !(isSelectingCards && isMelee);
   const showOpponentDeck = (judge.matchType === MatchType.CPU) || (isServerClientObserver && !isMelee);
-  const showOpponentCollected = (!isSelectingCards) && (isServerClientObserver || isCPU);
+  const showOpponentCollected = (!isSelectingCards) && (isServerClientObserver || isCPU) && (!isMelee || !judge.isObserver());
   const showPlayerCollected = (!isSelectingCards) || isMelee;
 
   let opponentCount = 0;
@@ -235,10 +238,10 @@ export default function GameTab({
   const opponentCollectedTop = canvasMargin;
   const opponentCollectedBottom = showOpponentCollected ? (opponentCollectedTop + cardHeight + hoverRaiseHeight) : opponentCollectedTop;
   
-  const opponentNameTop = showOpponentCollected ? (opponentCollectedBottom + canvasSpacing) : opponentCollectedTop;
-  const opponentNameBottom = showPlayerName ? (opponentNameTop + playerNameHeight) : opponentNameTop;
+  const opponentNameTop = showOpponentCollected ? (opponentCollectedBottom + canvasSpacing) : opponentCollectedBottom;
+  const opponentNameBottom = showOpponentName ? (opponentNameTop + playerNameHeight) : opponentNameTop;
   
-  const opponentDeckTop = showPlayerName ? (opponentNameBottom + canvasSpacing) : opponentNameBottom;
+  const opponentDeckTop = showOpponentName ? (opponentNameBottom + canvasSpacing) : opponentNameBottom;
   const opponentDeckBottom = showOpponentDeck ? (opponentDeckTop + deckHeight) : opponentDeckTop;
 
   const middleBarTop = showOpponentDeck ? (opponentDeckBottom + canvasSpacing) : opponentDeckBottom;
@@ -247,12 +250,12 @@ export default function GameTab({
   const playerDeckTop = middleBarBottom + canvasSpacing;
   const playerDeckBottom = playerDeckTop + deckHeight;
 
-  const playerNameTop = (!showPlayerName) ? (playerDeckBottom + 50) : (
-    (isSelectingCards) ? (playerDeckBottom + canvasMargin + buttonSize + canvasSpacing) : (playerDeckBottom + canvasSpacing + 50)
+  const playerNameTop = (!showPlayerName) ? (playerDeckBottom + (isMelee ? playerNameHeight : (isNoOpponent ? canvasMargin : 50))) : (
+    (isSelectingCards) ? (playerDeckBottom + canvasMargin + buttonSize + canvasSpacing) : (playerDeckBottom + canvasSpacing + (isNoOpponent ? canvasMargin : 50))
   );
   const playerNameBottom = showPlayerName ? (playerNameTop + playerNameHeight) : playerNameTop;
   
-  const playerCollectedTop = playerNameBottom + canvasSpacing ;
+  const playerCollectedTop = playerNameBottom + canvasSpacing;
   const playerCollectedBottom = showPlayerCollected ? (playerCollectedTop + cardHeight + hoverRaiseHeight) : playerCollectedTop;
 
   let canvasHeight = playerCollectedBottom + canvasMargin;
@@ -310,7 +313,9 @@ export default function GameTab({
       return;
     }
 
-    if (!judge.players[id].isObserver) {
+    const isObserver = judge.players[id].isObserver;
+
+    if (!isObserver) {
       judge.state = GameJudgeState.SelectingCards;
       judge.stopGame();
       setDragInfo(null);
@@ -337,6 +342,9 @@ export default function GameTab({
       }
     }
     peer.dataConnectionToClients = newDataConnections;
+    if (!isObserver) {
+      judge.resetNonServerState();
+    }
 
     judge.broadcastNames();
     setJudge(judge.reconstruct());
@@ -363,6 +371,7 @@ export default function GameTab({
       judge.players = [judge.players[0]]
       judge.myPlayerIndex = 0;
     }
+    judge.resetNonServerState();
     setJudge(judge.reconstruct());
   }
 
@@ -547,7 +556,9 @@ export default function GameTab({
         judge.players[0].deck.push(new CardInfo(null, 0));
       }
       judge.addPlayer(judge.players[0].name, true);
+      judge.players[1].isObserver = false;
       judge.myPlayerIndex = 1;
+      judge.resetNonServerState();
     }
     if (judge.matchType === MatchType.Observer) {
       judge.players[0].deck = [];
@@ -555,7 +566,9 @@ export default function GameTab({
         judge.players[0].deck.push(new CardInfo(null, 0));
       }
       judge.addPlayer(judge.players[0].name, false);
+      judge.players[1].isObserver = false;
       judge.myPlayerIndex = 1;
+      judge.resetNonServerState();
     }
     setJudge(judge.reconstruct());
   }
@@ -566,6 +579,7 @@ export default function GameTab({
     const sendExcept = { send: true, except: sender } as SendOption;
 
     switch (event.type) {
+
       case "pauseMusic": {
         notifyPauseMusic();
         if (judge.isServer()) {
@@ -573,6 +587,7 @@ export default function GameTab({
         }
         break;
       }
+
       case "resumeMusic": {
         notifyPlayMusic();
         if (judge.isServer()) {
@@ -580,9 +595,10 @@ export default function GameTab({
         }
         break;
       }
+
       case "syncSettings": {
         if (judge.isServer()) {
-          console.log("[GameTab] Received syncSettings event on server.");
+          console.warn("[GameTab] Received syncSettings event on server.");
         } else {
           setPlaybackSetting({
             ...playbackSetting,
@@ -592,9 +608,10 @@ export default function GameTab({
         }
         break;
       }
+
       case "chat": {
         const newMessage: ChatMessage = {
-          role: event.sender === "system" ? "system" : "peer",
+          role: event.sender === "system" ? "system" : (judge.players[event.sender].isObserver ? "observer" : "peer"),
           sender: event.sender === "system" ? GetLocalizedString(Localization.ChatMessageSenderSystem) : judge.players[event.sender].name,
           message: event.message,
         }
@@ -604,6 +621,31 @@ export default function GameTab({
         }
         break;
       }
+
+      case "broadcastPlayerNames":
+        const settings = event.settings;
+        let message = "";
+        settings.forEach((s, index) => {
+          message += `${index === 0 ? "" : ", "}${s.name}`;
+          if (index === 0) {
+            message += ` (${GetLocalizedString(Localization.GameParticipantsServer)})`;
+          } else if (index === judge.myPlayerIndex) {
+            message += ` (${GetLocalizedString(Localization.GameParticipantsYou)})`;
+            if (s.isObserver) {
+              message += ` (${GetLocalizedString(Localization.GameObserver)})`;
+            }
+          } else if (s.isObserver) {
+            message += ` (${GetLocalizedString(Localization.GameObserver)})`;
+          } else {
+            message += ` (${GetLocalizedString(Localization.GamePlayer)})`;
+          }
+        });
+        addSystemChatMessage(
+          GetLocalizedString(Localization.GameMessageParticipants)
+          + ": " + message
+        );
+        break;
+        
       case "notifyName": {
         if (!event.isObserver) {
           // reorganize players so that the clients are always in the first
@@ -620,7 +662,18 @@ export default function GameTab({
           }
           const newPlayers: Array<PlayerInfo> = [];
           for (let i = 0; i < newOrder.length; i++) {
-            peer.dataConnectionToClients[newOrder[i] - 1].index = i + 1;
+            const ori = peer.dataConnectionToClients[i].index;
+            let found = false;
+            for (let j = 0; j < judge.players.length; j++) {
+              if (ori === newOrder[j]) {
+                peer.dataConnectionToClients[i].index = j + 1;
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              console.error("[GameTab] Failed to reorganize peer connections upon client notifyName.");
+            }
             newPlayers.push(judge.players[newOrder[i]]);
           }
           if (changed) {
@@ -801,15 +854,12 @@ export default function GameTab({
         const settingObj = JSON.parse(storedSetting);
         if (typeof settingObj.cardWidthPercentage === "number") {
           setCardWidthPercentage(settingObj.cardWidthPercentage);
-          console.log("Loaded card width percentage:", settingObj.cardWidthPercentage);
         }
         if (typeof settingObj.deckRows === "number" && settingObj.deckRows >= 1 && settingObj.deckRows <= maxDeckRows) {
           judge.deckRows = settingObj.deckRows;
-          console.log("Loaded deck rows:", settingObj.deckRows);
         }
         if (typeof settingObj.deckColumns === "number" && settingObj.deckColumns >= 1 && settingObj.deckColumns <= maxDeckColumns) {
           judge.deckColumns = settingObj.deckColumns;
-          console.log("Loaded deck columns:", settingObj.deckColumns);
         }
         judge.adjustDeckSize(judge.deckRows, judge.deckColumns, { send: false, except: null });
         setJudge(judge => judge.reconstruct());
@@ -842,10 +892,10 @@ export default function GameTab({
 
   // region render cards
 
-  
+  // placeholders
   for (let deckIndex = 0; deckIndex < 2; deckIndex++) {
     if (deckIndex === 1 && (isMelee || judge.matchType === MatchType.None)) { continue; }
-    const playerIndex = (judge.isServer() ? deckIndex : 1 - deckIndex) as 0 | 1;
+    const playerIndex = ((judge.isServer() || isCPU || isNoOpponent || isMelee) ? deckIndex : 1 - deckIndex) as 0 | 1;
     if (judge.players.length <= playerIndex) { continue; }
     const player = judge.players[playerIndex];
     const deck = player.deck;
@@ -868,13 +918,14 @@ export default function GameTab({
     });
   }
 
+  // decks
   judge.players.forEach((player, pi) => {
     const deck = player.deck;
     const playerIndex = pi as 0 | 1;
     if (playerIndex === 1 && !showOpponentDeck) {
       return;
     }
-    const deckIndex = (judge.isServer() ? playerIndex : 1 - playerIndex) as 0 | 1;
+    const deckIndex = ((judge.isServer() || isCPU || isNoOpponent || isMelee) ? playerIndex : 1 - playerIndex) as 0 | 1;
     deck.forEach((cardInfo, index) => {
       if (cardInfo.characterId !== null) {
         const cardKey = cardInfo.toKey();
@@ -910,8 +961,8 @@ export default function GameTab({
     });
   });
 
+  // unused cards
   const unusedTotalWidthMax = cardWidth + 50;
-  let unusedCardsUsePlayerCollectedWidth = false;
   let unusedTotalWidth = (canvasWidth - deckWidth) / 2 - canvasSpacing - canvasMargin - 45;
   if (unusedTotalWidth > unusedTotalWidthMax) {
     unusedTotalWidth = unusedTotalWidthMax;
@@ -929,7 +980,9 @@ export default function GameTab({
     }
   } else if (isServerClientObserver && isMelee) {
     unusedCardsYBase = playerCollectedBottom - cardHeight;
-    unusedCardsUsePlayerCollectedWidth = true;
+  }
+  if (unusedCardsYBase + cardHeight + 25 + canvasMargin > canvasHeight) {
+    canvasHeight = unusedCardsYBase + cardHeight + 25 + canvasMargin;
   }
   const unusedCardsBottom = unusedCardsYBase + cardHeight;
   unusedCards.forEach((cardInfo, index) => {
@@ -984,13 +1037,14 @@ export default function GameTab({
     });
   }
 
+  // collecteds
   if (judge.state !== GameJudgeState.SelectingCards) {
-    const observerNamesWidth = 100;
+    const observerNamesWidth = 150;
     let opponentIndex = 0;
     if (observerNames.length > 0) {
       // add observer list
-      const x = canvasWidth - canvasMargin - observerNamesWidth;
-      const y = opponentCollectedTop;
+      const x = (isMelee && judge.isObserver()) ? (canvasMargin + unusedTotalWidthMax + canvasMargin) : (canvasWidth - canvasMargin - observerNamesWidth);
+      const y = (isMelee && judge.isObserver()) ? playerNameTop : opponentCollectedTop;
       otherElements.push(
         <Stack
           direction="column"
@@ -1011,11 +1065,12 @@ export default function GameTab({
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
               overflow: "hidden",
-              userSelect: "none" 
+              userSelect: "none",
+              textAlign: "right",
             }} 
             fontFamily={NoFontFamily}
           >
-            {GetLocalizedString(Localization.GameObservers, new Map([["plural", observerNames.length > 1 ? "s" : ""]]))}
+            {GetLocalizedString(Localization.GameObserversList, new Map([["plural", observerNames.length > 1 ? "s" : ""]]))}
           </Typography>
           {judge.players.map((player, id) => {
             if (!player.isObserver) {return null;}
@@ -1027,7 +1082,9 @@ export default function GameTab({
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
-                userSelect: "none" 
+                userSelect: "none",
+                textAlign: "right",
+                color: (id === judge.myPlayerIndex) ? CustomColors.selfColor : CustomColors.observerColor,
               }} 
               fontFamily={NoFontFamily}
               color={id === judge.myPlayerIndex ? "secondary" : "primary"}
@@ -1047,33 +1104,42 @@ export default function GameTab({
       if (player.isObserver) { return; }
 
       // const deckId = (judge.isServer()) ? playerId : playerId;
-      const onOpponentSide = judge.isObserver() ? (playerId === 0) : playerId !== judge.myPlayerIndex;
-      const y = (!onOpponentSide) ? playerCollectedTop : opponentCollectedTop;
+      const onOpponentSide = judge.isObserver() ? (isMelee ? false : playerId === 0) : playerId !== judge.myPlayerIndex;
+      const y = (!onOpponentSide) ? (playerCollectedTop + hoverRaiseHeight) : opponentCollectedTop;
       let startX = canvasWidth - canvasMargin - cardWidth * 2 - canvasSpacing;
-      let totalWidth = canvasWidth - canvasMargin * 2 - cardWidth * 2 - canvasSpacing;
+      let totalWidth = canvasWidth - canvasMargin * 2;
       if (onOpponentSide) {
         if (observerNames.length > 0) {
-          totalWidth -= observerNamesWidth + canvasSpacing;
+          totalWidth -= observerNamesWidth + canvasMargin;
         }
         if (opponentCount === 1) {
+          totalWidth -= cardWidth + canvasSpacing;
           startX = canvasMargin + cardWidth + canvasSpacing;
         } else {
           startX = canvasMargin + ((totalWidth - (opponentCount - 1) * canvasSpacing) / opponentCount + canvasSpacing) * opponentIndex;
           totalWidth = (totalWidth - (opponentCount - 1) * canvasSpacing) / opponentCount
         }
       } else {
-        if (unusedCardsUsePlayerCollectedWidth) {
-          totalWidth -= unusedTotalWidthMax + canvasSpacing;
+        if (isMelee) {
+          totalWidth -= unusedTotalWidthMax + canvasMargin;
+        }
+        if (judge.isObserver() && isMelee) {
+          totalWidth = totalWidth - opponentCount * canvasSpacing - observerNamesWidth - canvasMargin;
+          totalWidth = totalWidth / (opponentCount + 1);
+          startX = canvasWidth - canvasMargin - (totalWidth + canvasSpacing) * (opponentCount - opponentIndex) - cardWidth;
+        } else {
+          totalWidth -= cardWidth + canvasSpacing;
         }
       }
-      opponentIndex += 1;
+      if (playerId !== judge.myPlayerIndex) { opponentIndex += 1; }
 
+      totalWidth -= cardWidth;
       let delta = d.length === 1 ? 0 : totalWidth / (d.length - 1);
       if (delta > cardWidth * 0.66) { delta = cardWidth * 0.66; }
       if (!onOpponentSide) {delta = -delta;}
 
       // add a text element
-      if (!onOpponentSide || opponentCount === 1) {
+      if ((!onOpponentSide || opponentCount === 1) && !(isMelee && judge.isObserver())) {
         const textLeft = (!onOpponentSide) ? (canvasWidth - canvasMargin - cardWidth) : canvasMargin;
         otherElements.push(
           <Box
@@ -1100,7 +1166,7 @@ export default function GameTab({
 
       if (onOpponentSide && opponentCount >= 2) {
         const textLeft = startX;
-        const textY = y + cardHeight + canvasSpacing;
+        const textY = opponentNameTop;
         otherElements.push(
           <Typography
             key={`opponent-name-deck-count-${playerId}`}
@@ -1108,18 +1174,49 @@ export default function GameTab({
               position: "absolute",
               left: `${textLeft}px`,
               top: `${textY}px`,
-              width: `${totalWidth}px`,
+              width: `${totalWidth + cardWidth}px`,
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
               overflow: "hidden",
               transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease, opacity 0.3s ease",
               fontFamily: NoFontFamily,
             }}
-            variant="body1"
+            variant="h6"
           >
-            {player.name} - {d.length} 
+            <span style={{color: CustomColors.opponentColor}}>
+              {judge.isObserver() 
+                ? GetLocalizedString(Localization.GamePlayer) 
+                : GetLocalizedString(Localization.GameOpponent)} {player.name}
+            </span> {GetLocalizedString(Localization.GameScore)}: {d.length} 
           </Typography>
         )
+      }
+
+      if (!onOpponentSide && isMelee && judge.isObserver()) {
+        const textLeft = startX - totalWidth;
+        const textY = playerNameTop;
+        otherElements.push(
+          <Typography
+            key={`opponent-name-deck-count-${playerId}`}
+            sx={{
+              position: "absolute",
+              left: `${textLeft}px`,
+              top: `${textY}px`,
+              width: `${totalWidth + cardWidth}px`,
+              textAlign: "right",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease, opacity 0.3s ease",
+              fontFamily: NoFontFamily,
+            }}
+            variant="h6"
+          >
+            <span style={{color: CustomColors.opponentColor}}>
+              {GetLocalizedString(Localization.GamePlayer)} {player.name}
+            </span> {GetLocalizedString(Localization.GameScore)}: {d.length} 
+          </Typography>
+        );
       }
 
       if (d.length === 0) { return; }
@@ -1130,14 +1227,12 @@ export default function GameTab({
         cardProps.x = startX + delta * index;
         cardProps.y = y;
         cardProps.zIndex = index;
-        if (!judge.isObserver()) {
-          cardProps.onMouseEnter = () => {
-            setHoveringCardInfo(cardInfo);
-          };
-          cardProps.onMouseLeave = () => {
-            setHoveringCardInfo(null);
-          };
-        }
+        cardProps.onMouseEnter = () => {
+          setHoveringCardInfo(cardInfo);
+        };
+        cardProps.onMouseLeave = () => {
+          setHoveringCardInfo(null);
+        };
         if (onOpponentSide) {
           cardProps.upsideDown = true;
         }
@@ -1532,8 +1627,7 @@ export default function GameTab({
     if (judge.state !== GameJudgeState.SelectingCards) return false;
     if (judge.isDeckEmpty(0)) return false;
     if (judge.matchType !== MatchType.None && !isMelee && (judge.players.length < 2 || judge.isDeckEmpty(1))) return false;
-    const selfPlayerIndex = judge.isClient() ? 1 : 0;
-    if (judge.players[selfPlayerIndex].confirmation.start) return false;
+    if (judge.players[judge.myPlayerIndex].confirmation.start) return false;
     return true;
   }
 
@@ -1564,7 +1658,6 @@ export default function GameTab({
     let delay = delayMean + (Math.random() * 2 - 1) * halfRange;
     if (delay < 0.1) { delay = 0.1; }
     const timeout = setTimeout(() => {
-      console.log("CPU opponent picking card");
       const judge = judgeRef.current;
       if (judge.matchType === MatchType.CPU && judge.state === GameJudgeState.TurnStart) {
         judge.simulateCPUOpponentPick(shouldMistake);
@@ -1575,7 +1668,6 @@ export default function GameTab({
   }
 
   const handleNextTurnCountdown = () => {
-    console.log("Next turn notified");
     if (isServerClientObserver) {
       notifyPlayCountdownAudio();
       timerTextStartCountdown();
@@ -1766,13 +1858,13 @@ export default function GameTab({
     }
     { // random fill button
       const hidden = judge.state !== GameJudgeState.SelectingCards || judge.isObserver();
-      const disabled = hidden || judge.isDeckFull(judge.myPlayerIndex);
+      const disabled = hidden || judge.isDeckFull(isMelee ? 0 : judge.myPlayerIndex);
       otherElements.push(
         <GameButton 
           key="random-fill-button"
           text={GetLocalizedString(Localization.GameRandomFill)}
           onClick={() => {
-            judge.randomFillDeck(judge.myPlayerIndex, sendToAll);
+            judge.randomFillDeck(isMelee ? 0 : judge.myPlayerIndex, sendToAll);
             setJudge(judge.reconstruct());
           }}
           disabled={disabled}
@@ -1788,13 +1880,13 @@ export default function GameTab({
     }
     { // clear deck button
       const hidden = judge.state !== GameJudgeState.SelectingCards || judge.isObserver();
-      const disabled = hidden || judge.isDeckEmpty(judge.myPlayerIndex);
+      const disabled = hidden || judge.isDeckEmpty(isMelee ? 0 : judge.myPlayerIndex);
       otherElements.push(
         <GameButton 
           key="clear-deck-button"
           text={GetLocalizedString(Localization.GameClearDeck)}
           onClick={() => {
-            judge.clearDeck(judge.myPlayerIndex, sendToAll);
+            judge.clearDeck(isMelee ? 0 : judge.myPlayerIndex, sendToAll);
             setJudge(judge.reconstruct());
           }}
           disabled={disabled}
@@ -1810,13 +1902,13 @@ export default function GameTab({
     }
     { // shuffle deck button
       const hidden = judge.state !== GameJudgeState.SelectingCards || judge.isObserver();
-      const disabled = hidden || judge.isDeckEmpty(judge.myPlayerIndex);
+      const disabled = hidden || judge.isDeckEmpty(isMelee ? 0 : judge.myPlayerIndex);
       otherElements.push(
         <GameButton 
           key="shuffle-deck-button"
           text={GetLocalizedString(Localization.GameShuffleDeck)}
           onClick={() => {
-            judge.shuffleDeck(judge.myPlayerIndex, sendToAll);
+            judge.shuffleDeck(isMelee ? 0 : judge.myPlayerIndex, sendToAll);
             setJudge(judge.reconstruct());
           }}
           disabled={disabled}
@@ -2011,7 +2103,9 @@ export default function GameTab({
             transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease, opacity 0.3s ease",
           }}
         >
-        <Typography variant="h3" fontFamily={MonospaceFontFamily}>{text}</Typography> 
+        <Typography variant="h3" fontFamily={MonospaceFontFamily} sx={{
+          userSelect: "none",
+        }}>{text}</Typography> 
       </Box>
       );
       x += timerTextWidth + canvasSpacing;
@@ -2019,7 +2113,10 @@ export default function GameTab({
     { // text are intentionally set no opacity transition to avoid hinting the player of the correct answer
       const musicInfo = getMusicInfoFromCharacterId(data, musicSelection, currentCharacterId);
       const hidden = judge.state !== GameJudgeState.TurnWinnerDetermined;
-      const width = deckWidth - (timerTextWidth + 3 * canvasSpacing + buttonSize * 2);
+      let width = deckWidth - (timerTextWidth + 3 * canvasSpacing + buttonSize * 2);
+      if (judge.isObserver()) {
+        width = deckWidth - (timerTextWidth + canvasSpacing);
+      }
       otherElements.push(
         <Typography 
           key="music-title-text"
@@ -2248,7 +2345,7 @@ export default function GameTab({
             top: `${opponentDeckTop - 5}px`,
             width: `${deckWidth + 10}px`,
             height: `${deckHeight + 5}px`,
-            backgroundColor: "#00000088",
+            backgroundColor: "#000000ff",
             zIndex: 1500,
             alignItems: "center",
             justifyContent: "center",
@@ -2427,7 +2524,7 @@ export default function GameTab({
     const x = deckRight + canvasMargin;
     let y = opponentDeckBottom - buttonSize;
     { // traditional mode button
-      const hidden = judge.state !== GameJudgeState.SelectingCards || judge.matchType === MatchType.None;
+      const hidden = judge.state !== GameJudgeState.SelectingCards || judge.matchType === MatchType.None || isMelee;
       otherElements.push(
         <GameButton
           key="opponent-traditional-mode-button"
@@ -2529,7 +2626,7 @@ export default function GameTab({
     }
     { // random fill opponent deck
       const hidden = !isSelectingCards || !isCPU;
-      const disabled = hidden ? true : (judge.players.length < 2 || judge.isDeckEmpty(1));
+      const disabled = hidden ? true : (judge.players.length < 2 || judge.isDeckFull(1));
       otherElements.push(
         <GameButton
           key="random-fill-opponent-deck-button"
@@ -2747,16 +2844,17 @@ export default function GameTab({
     }
   }
 
+  // region player name
   // player names
   {
     { // self name
-      const shown = showPlayerName;
+      const shown = showPlayerName && !(isMelee && judge.isObserver()) && !(judge.isObserver() && !peer.hasConnectionToServer());
       const y = playerNameTop;
       let x = canvasWidth - deckLeft - deckWidth;
       if (judge.state !== GameJudgeState.SelectingCards) {
         x = canvasMargin;
       }
-      const name = !shown ? "" : (judge.isServer() ? judge.players[0].name : judge.players[1].name);
+      const name = !shown ? "" : (judge.isObserver() ? judge.players[1].name : judge.players[judge.myPlayerIndex].name);
       otherElements.push(
         <Typography 
           key="player-name-text"
@@ -2771,6 +2869,7 @@ export default function GameTab({
             fontFamily: NoFontFamily,
             textAlign: "right",
             width: deckWidth,
+            color: judge.isObserver() ? CustomColors.opponentColor : CustomColors.selfColor,
           }}
         >
           {GetLocalizedString(Localization.GamePlayer)} {name}
@@ -2810,6 +2909,7 @@ export default function GameTab({
             opacity: shown ? 1.0 : 0.0,
             transition: "left 0.3s ease, top 0.3s ease, opacity 0.3s ease",
             fontFamily: NoFontFamily,
+            color: CustomColors.opponentColor,
           }}
         >
           {judge.isObserver() ? GetLocalizedString(Localization.GamePlayer) : GetLocalizedString(Localization.GameOpponent)} {name}

@@ -2,9 +2,10 @@ import { Stack, TextField, Typography } from "@mui/material";
 import { useState } from "react";
 import { NoFontFamily } from "./Theme";
 import { GetLocalizedString, Localization } from "../types/Localization";
+import { CustomColors } from "../types/Consts";
 
 type ChatMessage = {
-  role: "me" | "peer" | "system";
+  role: "me" | "peer" | "observer" | "system";
   sender: string;
   message: string;
 }
@@ -26,9 +27,10 @@ export default function ChatBox({
         sx={{ width: "100%", wordBreak: "break-word", fontFamily: NoFontFamily }}
       >
         <strong style={{ color: msg.role === "me" 
-            ? "#9f9fffff" : msg.role === "peer" 
-            ? "#ff9f9fff" 
-            : "gray" }}>
+            ? CustomColors.selfColor : msg.role === "peer" 
+            ? CustomColors.opponentColor : msg.role === "observer"
+            ? CustomColors.observerColor 
+            : CustomColors.systemColor }}>
           {msg.sender}
         </strong>: {msg.message}
       </Typography>

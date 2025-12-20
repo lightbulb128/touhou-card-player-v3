@@ -930,7 +930,6 @@ class GameJudge {
   }
 
   nextTurn(): boolean {
-    console.log("[GameJudge] Moving to next turn.");
     const playingOrder = this.playingOrder();
     const characterTemporaryDisabled = this.characterTemporaryDisabled();
     const currentCharacterId = this.currentCharacterId();
@@ -1267,8 +1266,6 @@ class GameJudge {
   countdownNextTurn(forceCountDown: boolean = false): void {
     // only use timeout if there is a remote player
     const needTimeout = [MatchType.Server, MatchType.Client, MatchType.Observer].includes(this.matchType);
-    console.log("this.matchType =", this.matchType);
-    console.log("[GameJudge.countdownNextTurn] needTimeout =", needTimeout, ", forceCountDown =", forceCountDown);
     if (needTimeout || forceCountDown) {
       this.setNextTurnTimeout();
       this.state = GameJudgeState.TurnCountdownNext;
