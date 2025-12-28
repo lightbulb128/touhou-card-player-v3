@@ -163,6 +163,12 @@ export default function Home() {
       }
       if (newSelection.size === 0) { flag = false; }
     } else { flag = false; }
+    // if some character is not in newSelection, set it to 0
+    for (const charId of characterSet) {
+      if (!newSelection.has(charId)) {
+        newSelection.set(charId, 0);
+      }
+    }
     // load playing order
     const newOrder: Array<CharacterId> = [];
     const orderStr = localStorage.getItem("playingOrder");
