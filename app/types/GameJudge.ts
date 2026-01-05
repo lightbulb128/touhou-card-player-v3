@@ -1183,18 +1183,20 @@ class GameJudge {
       }
 
       // if on the other side's collected, remove it
-      if (this.matchType !== MatchType.None && !this.isMelee()) {
-        const opponent = winningPickEvent!.player === 0 ? 1 : 0;
-        let indexToRemove = -1;
-        for (let i = 0; i < this.players[opponent].collected.length; i++) {
-          if (this.players[opponent].collected[i].characterId === currentCharacterId) {
-            indexToRemove = i;
-            break;
+      if (this.matchType !== MatchType.None) {
+        for (let opponent = 0; opponent < this.players.length; opponent++) {
+          if (winningPickEvent!.player === opponent) { continue; }
+          let indexToRemove = -1;
+          for (let i = 0; i < this.players[opponent].collected.length; i++) {
+            if (this.players[opponent].collected[i].characterId === currentCharacterId) {
+              indexToRemove = i;
+              break;
+            }
           }
-        }
-        if (indexToRemove !== -1) {
-          console.log(`[GameJudge.notifyPickEvent] Removing card ${currentCharacterId} from ${opponent}'s collected cards.`);
-          this.players[opponent].collected.splice(indexToRemove, 1);
+          if (indexToRemove !== -1) {
+            console.log(`[GameJudge.notifyPickEvent] Removing card ${currentCharacterId} from ${opponent}'s collected cards.`);
+            this.players[opponent].collected.splice(indexToRemove, 1);
+          }
         }
       }
 
