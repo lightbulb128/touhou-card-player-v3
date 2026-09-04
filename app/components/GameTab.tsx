@@ -59,6 +59,7 @@ export interface GameTabProps {
 
 type CardRenderProps = {
   cardInfo: CardInfo;
+  visible: boolean;
   x: number;
   y: number;
   zIndex: number;
@@ -271,6 +272,7 @@ export default function GameTab({
       const cardInfo = new CardInfo(characterId, index);
       const props: CardRenderProps = {
         cardInfo: cardInfo,
+        visible: false,
         x: 0, y: 0,
         zIndex: 0,
         width: `${cardWidth}px`,
@@ -473,7 +475,13 @@ export default function GameTab({
       return false;
     };
     
+    // During actual gameplay, only characters taking part in this match can ever end up
+    // in the deck/collected piles, so restrict the "unused" pile scan to playingOrder to
+    // avoid instantiating + rendering hundreds of irrelevant cards (perf: was O(all cards)).
+    const isGameplay = judge.state !== GameJudgeState.SelectingCards;
+    const relevantCharacterIds = isGameplay ? new Set(playingOrder) : null;
     data.characterConfigs.forEach((characterConfig, characterId) => {
+      if (relevantCharacterIds !== null && !relevantCharacterIds.has(characterId)) { return; }
       characterConfig.card.forEach((cardId, index) => {
         const cardInfo = new CardInfo(characterId, index);
         if (isUnused(cardInfo)) {
@@ -487,7 +495,8 @@ export default function GameTab({
     const finalUnused: Array<CardInfo> = [];
     unusedCards.forEach((cardInfo) => {
       const key = cardInfo.toKey();
-      if (isUnused(cardInfo) && !unusedKeysSet.has(key)) {
+      const isRelevant = relevantCharacterIds === null || cardInfo.characterId === null || relevantCharacterIds.has(cardInfo.characterId);
+      if (isRelevant && isUnused(cardInfo) && !unusedKeysSet.has(key)) {
         unusedKeysSet.add(key);
         finalUnused.push(cardInfo);
       } else {
@@ -822,7 +831,7 @@ export default function GameTab({
   
   useEffect(() => {
     updateUnusedCards();
-  }, [data, musicSelection, judge, dragInfo]);
+  }, [data, musicSelection, judge, dragInfo, playingOrder]);
 
   useEffect(() => {
     // save to local storage
@@ -932,6 +941,7 @@ export default function GameTab({
         const cardProps = cards.get(cardKey);
         if (cardProps === undefined) return;
         const pos = toDeckCardPosition(deckIndex, index);
+        cardProps.visible = true;
         cardProps.x = pos.x;
         cardProps.y = pos.y;
         cardProps.zIndex = 200;
@@ -989,6 +999,7 @@ export default function GameTab({
     const cardKey = cardInfo.toKey();
     const cardProps = cards.get(cardKey);
     if (cardProps === undefined) return;
+    cardProps.visible = true;
     cardProps.x = canvasMargin + unusedD * index;
     cardProps.y = unusedCardsYBase - unusedD * index;
     cardProps.zIndex = index;
@@ -1031,6 +1042,7 @@ export default function GameTab({
     selectableCardKeys.forEach((cardKey, index) => {
       const cardProps = cards.get(cardKey.toKey());
       if (cardProps === undefined) return;
+      cardProps.visible = true;
       cardProps.x = deckLeft + index * (cardWidth - cardSelectionOverlap) + offset;
       cardProps.y = middleBarTop + 16;
       cardProps.zIndex = selectableCardKeys.length - index;
@@ -1224,6 +1236,7 @@ export default function GameTab({
         const cardKey = cardInfo.toKey();
         const cardProps = cards.get(cardKey);
         if (cardProps === undefined) return;
+        cardProps.visible = true;
         cardProps.x = startX + delta * index;
         cardProps.y = y;
         cardProps.zIndex = index;
@@ -3075,7 +3088,7 @@ export default function GameTab({
             }}
           />
         }
-        {Array.from(cards.values()).map((cardProps, _index) => {
+        {Array.from(cards.values()).filter((cardProps) => cardProps.visible).map((cardProps, _index) => {
           const elementKey = `${cardProps.cardInfo.characterId}-${cardProps.cardInfo.cardIndex}`;
           return <CharacterCard
             key={elementKey}
