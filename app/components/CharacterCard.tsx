@@ -2,7 +2,7 @@ import { Box, Paper, Stack, SxProps } from "@mui/material";
 import { CardAspectRatio } from "../types/Configs";
 import { PagePRNG } from "../types/PagePrng";
 import Image from "next/image";
-import { useEffect } from "react";
+import { memo, useEffect } from "react";
 import { isCheat, randomColor } from "../types/Cheat";
 
 let fromR2: boolean | null = null;
@@ -57,7 +57,37 @@ export interface CharacterCardProps {
 	[key: string]: unknown;
 }
 
-export function CharacterCard({
+// Cards are rendered by the hundreds in GameTab; a custom comparator lets us skip
+// re-rendering a card when only handler identities changed (new closures each render)
+// while still reacting to anything that affects what's on screen or is clickable/hoverable.
+function charactersCardPropsAreEqual(prev: CharacterCardProps, next: CharacterCardProps): boolean {
+	if (
+		prev.cardCollection !== next.cardCollection ||
+		prev.imageSource !== next.imageSource ||
+		prev.backgroundState !== next.backgroundState ||
+		prev.raised !== next.raised ||
+		prev.raiseDirection !== next.raiseDirection ||
+		prev.aspectRatio !== next.aspectRatio ||
+		prev.width !== next.width ||
+		prev.paperElevation !== next.paperElevation ||
+		prev.paperVariant !== next.paperVariant ||
+		prev.upsideDown !== next.upsideDown ||
+		!!prev.onClick !== !!next.onClick ||
+		!!prev.onMouseEnter !== !!next.onMouseEnter ||
+		!!prev.onMouseLeave !== !!next.onMouseLeave
+	) {
+		return false;
+	}
+	const prevSx = (prev.sx ?? {}) as Record<string, unknown>;
+	const nextSx = (next.sx ?? {}) as Record<string, unknown>;
+	const sxKeysToCompare = ["left", "top", "zIndex", "transition", "opacity", "position"];
+	for (const key of sxKeysToCompare) {
+		if (prevSx[key] !== nextSx[key]) { return false; }
+	}
+	return true;
+}
+
+function CharacterCardImpl({
 	cardCollection,
 	imageSource,
 	backgroundState, raised, raiseDirection,
@@ -204,6 +234,8 @@ export function CharacterCard({
 		</Paper>
 	)
 }
+
+export const CharacterCard = memo(CharacterCardImpl, charactersCardPropsAreEqual);
 
 export interface CharacterCardStackedProps {
 	cardCollection: string;

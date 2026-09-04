@@ -5,7 +5,7 @@ import {
   MusicSelectionMap, Playback, PlaybackSetting,
   PlaybackState, CardAspectRatio
 } from "../types/Configs";
-import { useState, useEffect, JSX, useRef } from "react";
+import { useState, useEffect, JSX, useRef, forwardRef, useImperativeHandle } from "react";
 import { 
   CardInfo, GameJudge, GameJudgeState, MatchType, OuterRefObject, 
   PickEvent, Player, DeckPosition, GamePeer,
@@ -114,6 +114,96 @@ function getCardTransitionString(duration: string): string {
   return `top ${duration}, left ${duration}, transform ${duration}, background-color ${duration}, width ${duration}, height ${duration}`;
 }
 
+export interface GameTimerDisplayHandle {
+  startCountdown: () => void;
+  startRunning: () => void;
+  pause: () => void;
+}
+
+interface GameTimerDisplayProps {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  shown: boolean;
+}
+
+// Owns its own ticking interval so a running/counting-down timer doesn't force
+// the whole (card-heavy) GameTab tree to re-render every 100ms.
+const GameTimerDisplay = forwardRef<GameTimerDisplayHandle, GameTimerDisplayProps>(
+  function GameTimerDisplay({ x, y, width, height, shown }, ref) {
+    const [timerState, setTimerState] = useState<TimerState>({
+      type: "zero", referenceTimestamp: 0, time: 0, intervalHandle: null
+    });
+    const timerStateRef = useRef<TimerState>(timerState);
+    useEffect(() => { timerStateRef.current = timerState; }, [timerState]);
+
+    useImperativeHandle(ref, () => ({
+      startCountdown: () => {
+        setTimerState((s) => ({ ...s, type: "countdown", referenceTimestamp: Date.now(), time: 0 }));
+      },
+      startRunning: () => {
+        setTimerState((s) => ({ ...s, type: "running", referenceTimestamp: Date.now(), time: 0 }));
+      },
+      pause: () => {
+        setTimerState((s) => ({ ...s, type: "paused" }));
+      },
+    }), []);
+
+    useEffect(() => {
+      const handle = setInterval(() => {
+        const s = timerStateRef.current;
+        switch (s.type) {
+          case "countdown": {
+            const deltaTime = Date.now() - s.referenceTimestamp;
+            const newTime = 3 - Math.floor(deltaTime / 1000);
+            if (newTime > 0) {
+              setTimerState((s) => ({ ...s, time: newTime }));
+            }
+            break;
+          }
+          case "running": {
+            const deltaTime = Date.now() - s.referenceTimestamp;
+            setTimerState((s) => ({ ...s, time: deltaTime / 1000 }));
+            break;
+          }
+        }
+      }, 100);
+      return () => { clearInterval(handle); }
+    }, []);
+
+    let text = "";
+    switch (timerState.type) {
+      case "countdown": text = timerState.time.toFixed(0); break;
+      case "running": text = timerState.time.toFixed(2); break;
+      case "paused": text = timerState.time.toFixed(2); break;
+      case "zero": text = "0"; break;
+    }
+
+    return (
+      <Box
+        sx={{
+          position: "absolute",
+          left: `${x}px`,
+          top: `${y}px`,
+          width: `${width}px`,
+          height: `${height}px`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#000000ff",
+          opacity: shown ? 1.0 : 0.0,
+          transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease, opacity 0.3s ease",
+        }}
+      >
+        <Typography variant="h3" fontFamily={MonospaceFontFamily} sx={{
+          userSelect: "none",
+        }}>{text}</Typography>
+      </Box>
+    );
+  }
+);
+
 export default function GameTab({
   data, 
   musicSelection,
@@ -175,10 +265,7 @@ export default function GameTab({
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [remotePlayerIdInput, setRemotePlayerIdInput] = useState<string>("");
   const [peerError, setPeerError] = useState<string>("")
-  const [timerState, setTimerState] = useState<TimerState>({ 
-    type: "zero", referenceTimestamp: 0, time: 0,
-    intervalHandle: null
-  });
+  const timerRef = useRef<GameTimerDisplayHandle>(null);
   const [cpuOpponentSetting, setCpuOpponentSetting] = useState<CPUOpponentSetting>({
     reactionTimeMean: 6,
     reactionTimeStdDev: 0.5,
@@ -187,11 +274,6 @@ export default function GameTab({
   const [cpuOpponentClickTimeout, setCpuOpponentClickTimeout] = useState<NodeJS.Timeout | null>(null);
   const [chatMessages, setChatMessages] = useState<Array<ChatMessage>>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const gref = useRef<{
-    timerState: TimerState
-  }>({
-    timerState: timerState
-  });
 
   const cards: Map<string, CardRenderProps> = new Map();
   const placeholderCards: Array<CardPlaceholderRenderProps> = new Array<CardPlaceholderRenderProps>();
@@ -445,7 +527,10 @@ export default function GameTab({
     return null;
   }
 
-  const updateUnusedCards = () => {
+  // Pure computation shared by the render pass (so newly-unused cards are positioned/visible
+  // in the very same frame they leave the tray/deck, keeping their fly-away transition) and the
+  // effect below (which persists the resulting order into state as next render's baseline).
+  const computeUnusedCardsList = (baseline: Array<CardInfo>): Array<CardInfo> => {
     const newUnused: Array<CardInfo> = [];
     const isUnused = (cardInfo: CardInfo): boolean => {
       if (cardInfo.characterId === null) { return false; }
@@ -491,16 +576,13 @@ export default function GameTab({
     });
     
     const unusedKeysSet = new Set<string>();
-    let changed = false;
     const finalUnused: Array<CardInfo> = [];
-    unusedCards.forEach((cardInfo) => {
+    baseline.forEach((cardInfo) => {
       const key = cardInfo.toKey();
       const isRelevant = relevantCharacterIds === null || cardInfo.characterId === null || relevantCharacterIds.has(cardInfo.characterId);
       if (isRelevant && isUnused(cardInfo) && !unusedKeysSet.has(key)) {
         unusedKeysSet.add(key);
         finalUnused.push(cardInfo);
-      } else {
-        changed = true;
       }
     });
     newUnused.forEach((cardInfo) => {
@@ -508,37 +590,26 @@ export default function GameTab({
       if (!unusedKeysSet.has(key)) {
         unusedKeysSet.add(key);
         finalUnused.push(cardInfo);
-        changed = true;
       }
     });
-    if (changed) {
-      setUnusedCards(finalUnused);
-    }
+    return finalUnused;
+  }
+
+  const isSameUnusedCardsList = (a: Array<CardInfo>, b: Array<CardInfo>): boolean => {
+    if (a.length !== b.length) { return false; }
+    return a.every((cardInfo, index) => cardInfo.toKey() === b[index].toKey());
   }
 
   const timerTextStartCountdown = () => {
-    setTimerState((timerState) => ({
-      ...timerState,
-      type: "countdown",
-      referenceTimestamp: Date.now(),
-      time: 0,
-    }));
+    timerRef.current?.startCountdown();
   }
 
   const timerTextStartRunning = () => {
-    setTimerState((timerState) => ({
-      ...timerState,
-      type: "running",
-      referenceTimestamp: Date.now(),
-      time: 0,
-    }));
+    timerRef.current?.startRunning();
   }
 
   const timerTextPause = () => {
-    setTimerState((timerState) => ({
-      ...timerState,
-      type: "paused",
-    }));
+    timerRef.current?.pause();
   }
 
   const disconnectWebRTCIfAny = () => {
@@ -726,46 +797,6 @@ export default function GameTab({
   }, [judge]);
 
   useEffect(() => {
-    gref.current.timerState = timerState;
-  }, [timerState]);
-
-  useEffect(() => {
-    const handle = setInterval(() => {
-      const timerState = gref.current.timerState;
-      switch (timerState.type) {
-        case "countdown": {
-          const deltaTime = Date.now() - timerState.referenceTimestamp;
-          const newTime = 3 - Math.floor(deltaTime / 1000);
-          if (newTime <= 0) {
-            // setTimerState((timerState) => ({
-            //   ...timerState,
-            //   type: "zero",
-            //   time: 0,
-            // }));
-          } else {
-            setTimerState((timerState) => ({
-              ...timerState,
-              time: newTime,
-            }));
-          }
-          break;
-        }
-        case "running": {
-          const deltaTime = Date.now() - timerState.referenceTimestamp;
-          const newTime = deltaTime / 1000;
-          setTimerState((timerState) => ({
-            ...timerState,
-            time: newTime,
-          }));
-          break;
-        }
-      }
-    }, 100);
-    setTimerState((timerState) => ({ ...timerState, intervalHandle: handle }));
-    return () => { clearInterval(handle); }
-  }, []);
-
-  useEffect(() => {
     const inPlayingOrder = new Set<CharacterId>(playingOrder);
     playingOrder.forEach((charId) => {
       inPlayingOrder.add(charId);
@@ -830,7 +861,10 @@ export default function GameTab({
   }, []);
   
   useEffect(() => {
-    updateUnusedCards();
+    const list = computeUnusedCardsList(unusedCards);
+    if (!isSameUnusedCardsList(list, unusedCards)) {
+      setUnusedCards(list);
+    }
   }, [data, musicSelection, judge, dragInfo, playingOrder]);
 
   useEffect(() => {
@@ -972,6 +1006,10 @@ export default function GameTab({
   });
 
   // unused cards
+  // Computed fresh (not from the possibly-stale `unusedCards` state) so a card that just
+  // became unused this render is positioned/visible immediately, instead of popping in a
+  // frame late once the persistence effect below catches up.
+  const liveUnusedCards = computeUnusedCardsList(unusedCards);
   const unusedTotalWidthMax = cardWidth + 50;
   let unusedTotalWidth = (canvasWidth - deckWidth) / 2 - canvasSpacing - canvasMargin - 45;
   if (unusedTotalWidth > unusedTotalWidthMax) {
@@ -979,7 +1017,7 @@ export default function GameTab({
   }
   let unusedD = 0;
   if (unusedTotalWidth > cardWidth) {
-    unusedD = (unusedTotalWidth - cardWidth) / (unusedCards.length - 1);
+    unusedD = (unusedTotalWidth - cardWidth) / (liveUnusedCards.length - 1);
   }
   if (unusedD > 5) { unusedD = 5; }
   let unusedCardsYBase = playerDeckTop + deckHeight - cardHeight;
@@ -995,7 +1033,7 @@ export default function GameTab({
     canvasHeight = unusedCardsYBase + cardHeight + 25 + canvasMargin;
   }
   const unusedCardsBottom = unusedCardsYBase + cardHeight;
-  unusedCards.forEach((cardInfo, index) => {
+  liveUnusedCards.forEach((cardInfo, index) => {
     const cardKey = cardInfo.toKey();
     const cardProps = cards.get(cardKey);
     if (cardProps === undefined) return;
@@ -1287,6 +1325,7 @@ export default function GameTab({
     const draggingKey = dragInfo.cardInfo.toKey();
     const props = cards.get(draggingKey);
     if (props !== undefined) {
+      props.visible = true;
       props.zIndex = 1000;
       props.transition = getCardTransitionString("0.1s");
       props.backgroundState = CardBackgroundState.Hover;
@@ -1316,6 +1355,7 @@ export default function GameTab({
     const draggingKey = dragInfo.cardInfo.toKey();
     const props = cards.get(draggingKey);
     if (props !== undefined) {
+      props.visible = true;
       props.zIndex = 1000;
       props.transition = getCardTransitionString("0.1s");
       props.backgroundState = CardBackgroundState.Hover;
@@ -2128,42 +2168,16 @@ export default function GameTab({
     let x = deckLeft;
     const y = middleBarTop;
     {
-      let text = "";
-      switch (timerState.type) {
-        case "countdown":
-          text = timerState.time.toFixed(0)
-          break;
-        case "running":
-          text = timerState.time.toFixed(2)
-          break;
-        case "paused":
-          text = timerState.time.toFixed(2)
-          break;
-        case "zero":
-          text = "0"
-          break;
-      }
       otherElements.push(
-        <Box
+        <GameTimerDisplay
           key="game-timer-box"
-          sx={{
-            position: "absolute",
-            left: `${x}px`,
-            top: `${y}px`,
-            width: `${timerTextWidth}px`,
-            height: `${middleBarHeight}px`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#000000ff",
-            opacity: middleBarShown ? 1.0 : 0.0,
-            transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease, opacity 0.3s ease",
-          }}
-        >
-        <Typography variant="h3" fontFamily={MonospaceFontFamily} sx={{
-          userSelect: "none",
-        }}>{text}</Typography> 
-      </Box>
+          ref={timerRef}
+          x={x}
+          y={y}
+          width={timerTextWidth}
+          height={middleBarHeight}
+          shown={middleBarShown}
+        />
       );
       x += timerTextWidth + canvasSpacing;
     }
@@ -3134,7 +3148,7 @@ export default function GameTab({
             left: `${canvasMargin}px`,
             top: `${unusedCardsBottom + canvasSpacing}px`,
             transition: "opacity 0.3s ease, left 0.3s ease, top 0.3s ease",
-            opacity: unusedCards.length > 0 ? 1.0 : 0.0,
+            opacity: liveUnusedCards.length > 0 ? 1.0 : 0.0,
             fontFamily: NoFontFamily,
             userSelect: "none",
           }}
