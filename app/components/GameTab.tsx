@@ -109,6 +109,7 @@ type CPUOpponentSetting = {
 }
 const maxDeckRows = 5;
 const maxDeckColumns = 15;
+const maxCardWidthTotalPercentage = 0.85;
 
 function getCardTransitionString(duration: string): string {
   return `top ${duration}, left ${duration}, transform ${duration}, background-color ${duration}, width ${duration}, height ${duration}`;
@@ -895,6 +896,9 @@ export default function GameTab({
     if (storedSetting) {
       try {
         const settingObj = JSON.parse(storedSetting);
+        if (settingObj.cardWidthPercentage * settingObj.deckColumns > maxCardWidthTotalPercentage) {
+          settingObj.cardWidthPercentage = maxCardWidthTotalPercentage / settingObj.deckColumns;
+        }
         if (typeof settingObj.cardWidthPercentage === "number") {
           setCardWidthPercentage(settingObj.cardWidthPercentage);
         }
@@ -1644,11 +1648,13 @@ export default function GameTab({
   const handleCardLarger = () => {
     let newPercentage = cardWidthPercentage + 0.01;
     if (newPercentage > cardWidthPercentageMax) newPercentage = cardWidthPercentageMax;
+    if (newPercentage * judge.deckColumns > maxCardWidthTotalPercentage) newPercentage = maxCardWidthTotalPercentage / judge.deckColumns;
     setCardWidthPercentage(newPercentage);
   }
   const handleCardSmaller = () => {
     let newPercentage = cardWidthPercentage - 0.01;
     if (newPercentage < cardWidthPercentageMin) newPercentage = cardWidthPercentageMin;
+    if (newPercentage * judge.deckColumns > maxCardWidthTotalPercentage) newPercentage = maxCardWidthTotalPercentage / judge.deckColumns;
     setCardWidthPercentage(newPercentage);
   }
 
@@ -1667,6 +1673,9 @@ export default function GameTab({
   const addDeckColumn = () => {
     if (judge.deckColumns >= maxDeckColumns) return;
     judge.adjustDeckSize(judge.deckRows, judge.deckColumns + 1, sendToAll);
+    if (cardWidthPercentage * (jduge.deckColumns + 1) > maxCardWidthTotalPercentage) {
+      setCardWidthPercentage(maxCardWidthTotalPercentage / (jduge.deckColumns + 1));
+    }
     setJudge(judge.reconstruct());
   }
 
