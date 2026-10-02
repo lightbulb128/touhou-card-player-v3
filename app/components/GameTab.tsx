@@ -1673,8 +1673,8 @@ export default function GameTab({
   const addDeckColumn = () => {
     if (judge.deckColumns >= maxDeckColumns) return;
     judge.adjustDeckSize(judge.deckRows, judge.deckColumns + 1, sendToAll);
-    if (cardWidthPercentage * (jduge.deckColumns + 1) > maxCardWidthTotalPercentage) {
-      setCardWidthPercentage(maxCardWidthTotalPercentage / (jduge.deckColumns + 1));
+    if (cardWidthPercentage * (judge.deckColumns + 1) > maxCardWidthTotalPercentage) {
+      setCardWidthPercentage(maxCardWidthTotalPercentage / (judge.deckColumns + 1));
     }
     setJudge(judge.reconstruct());
   }
