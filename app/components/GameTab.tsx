@@ -20,6 +20,7 @@ import {
   DeckColumnControls, DeckSizeControls, MiddleBar, OpponentDeckControls, VolumeControl,
 } from "./game/GameControls";
 import { PlayerNameOverlay, playerNameExtent } from "./game/PlayerNameOverlay";
+import { playerNamePlates } from "./game/playerNamePlates";
 import { buildCardVisuals } from "./game/cardVisuals";
 import { createDragHandlers } from "./game/cardDrag";
 import { useGameSession } from "./game/useGameSession";
@@ -153,8 +154,12 @@ function GameTab(props: GameTabProps) {
   const cheatCard = visuals.cheatCardKey !== null ? visuals.cards.get(visuals.cheatCardKey) : undefined;
   const showCheatHint = isCheatReally() && cheatCard !== undefined && cheatCard.visible;
 
-  const selfName = judge.players[judge.myPlayerIndex]?.name ?? "";
-  const opponentName = judge.players[judge.isServer() ? 1 : 0]?.name ?? "";
+  const namePlates = playerNamePlates({
+    layout,
+    players: judge.players,
+    isMelee: session.isMelee,
+    myPlayerIndex: judge.myPlayerIndex,
+  });
 
   return (
     <Box>
@@ -211,7 +216,7 @@ function GameTab(props: GameTabProps) {
           cardCanGrow={layout.deckRight + layout.canvasMargin + 150 + layout.canvasMargin <= layout.canvasWidth}
           deckRows={judge.deckRows}
           maxDeckRows={5}
-          deckIsFull={judge.isDeckFull(session.localDeckIndex)}
+          randomFillDisabled={session.randomFillDisabled}
           deckIsEmpty={judge.isDeckEmpty(session.localDeckIndex)}
           startButton={session.startButton}
           opponentButton={session.opponentButton}
@@ -264,6 +269,7 @@ function GameTab(props: GameTabProps) {
           onShuffleOpponentDeck={actions.shuffleOpponentDeck}
           onClearOpponentDeck={actions.clearOpponentDeck}
           onRandomFillOpponentDeck={actions.randomFillOpponentDeck}
+          randomFillDisabled={session.opponentRandomFillDisabled}
         />
 
         <ConnectionPanel
@@ -286,15 +292,11 @@ function GameTab(props: GameTabProps) {
 
         <PlayerNameOverlay
           layout={layout}
-          selfName={selfName}
-          opponentName={opponentName}
+          plates={namePlates}
           connectedToServer={peer.hasConnectionToServer()}
           isObserver={judge.isObserver()}
-          isServer={judge.isServer()}
           isClient={judge.isClient()}
           isMelee={session.isMelee}
-          playerCount={judge.players.length}
-          secondPlayerIsObserver={judge.players[1]?.isObserver ?? false}
           isSelectingCards={session.isSelectingCards}
         />
 

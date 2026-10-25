@@ -330,3 +330,72 @@ describe("buildCardVisuals hover and cheat hints", () => {
     expect(visuals.cheatCardKey).toBeNull();
   });
 });
+
+describe("buildCardVisuals melee name labels", () => {
+  /** Server, two remote players and a spectator: the smallest melee, with one card collected each. */
+  function setUpMelee(judge: GameJudge, matchType: MatchType, myPlayerIndex: number) {
+    judge.matchType = matchType;
+    judge.players[0].name = "Server";
+    judge.addPlayer("P2");
+    judge.players[1].isObserver = false;
+    judge.addPlayer("P3");
+    judge.players[2].isObserver = false;
+    judge.addPlayer("Watcher");
+    judge.myPlayerIndex = myPlayerIndex;
+    judge.state = GameJudgeState.TurnStart;
+    judge.players.forEach((player, index) => {
+      if (!player.isObserver) { player.collected.push(new CardInfo("alice", index)); }
+    });
+  }
+
+  it("labels every player's pile for a melee observer", () => {
+    const { visuals } = makeHarness({
+      setUp: (judge) => { setUpMelee(judge, MatchType.Observer, 3); },
+    });
+
+    // no plate is shown to a spectator, so each pile carries its own player's name
+    expect(visuals.collectedModel.scoreLabels.map((label) => label.prefix))
+      .toEqual(["Player Server", "Player P2", "Player P3"]);
+    // the names already carry the score, so the separate score badges stay hidden
+    expect(visuals.collectedModel.scoreBadges).toEqual([]);
+    expect(visuals.collectedModel.observerList?.entries).toEqual([
+      { name: "Watcher", isSelf: true },
+    ]);
+  });
+
+  it("keeps the local spectator out of the player labels", () => {
+    const { visuals } = makeHarness({
+      setUp: (judge) => { setUpMelee(judge, MatchType.Observer, 3); },
+    });
+
+    const prefixes = visuals.collectedModel.scoreLabels.map((label) => label.prefix);
+    expect(prefixes.some((prefix) => prefix.includes("Watcher"))).toBe(false);
+  });
+
+  it("labels the other players, never the local client, in a melee lineup", () => {
+    const { visuals } = makeHarness({
+      setUp: (judge) => { setUpMelee(judge, MatchType.Client, 2); },
+    });
+
+    // P3 sits at the local slot, so it is named by the near plate instead of a pile label
+    expect(visuals.collectedModel.scoreLabels.map((label) => label.prefix))
+      .toEqual(["Opponent Server", "Opponent P2"]);
+  });
+
+  it("shows no pile labels while the melee lineup is being built", () => {
+    const { visuals } = makeHarness({
+      setUp: (judge) => {
+        setUpMelee(judge, MatchType.Observer, 3);
+        judge.state = GameJudgeState.SelectingCards;
+        judge.players.forEach((player) => { player.collected = []; });
+      },
+    });
+
+    expect(visuals.collectedModel.scoreLabels).toEqual([]);
+    expect(visuals.collectedModel.scoreBadges).toEqual([]);
+    // the observer list keeps its own name visible during the lineup
+    expect(visuals.collectedModel.observerList?.entries).toEqual([
+      { name: "Watcher", isSelf: true },
+    ]);
+  });
+});

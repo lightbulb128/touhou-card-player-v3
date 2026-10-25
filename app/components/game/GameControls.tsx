@@ -91,8 +91,9 @@ export interface DeckColumnControlsProps {
   cardCanGrow: boolean;
   deckRows: number;
   maxDeckRows: number;
-  deckIsFull: boolean;
   deckIsEmpty: boolean;
+  /** True when the deck is full or no character is left to fill it with. */
+  randomFillDisabled: boolean;
   startButton: StartButtonModel;
   opponentButton: OpponentButtonModel;
   onCardSmaller: () => void;
@@ -107,7 +108,7 @@ export interface DeckColumnControlsProps {
 
 export function DeckColumnControls({
   layout, visibility, isMusicFilteredByDeck, cardWidthPercentage, cardWidthPercentageLimit,
-  cardCanGrow, deckRows, maxDeckRows, deckIsFull, deckIsEmpty,
+  cardCanGrow, deckRows, maxDeckRows, randomFillDisabled, deckIsEmpty,
   startButton, opponentButton,
   onCardSmaller, onCardLarger, onFilterByDeck, onRandomFill, onClearDeck,
   onShuffleDeck, onRemoveRow, onAddRow,
@@ -163,7 +164,7 @@ export function DeckColumnControls({
       <GameButton
         text={GetLocalizedString(Localization.GameRandomFill)}
         onClick={onRandomFill}
-        disabled={!visibility.randomFill || deckIsFull}
+        disabled={!visibility.randomFill || randomFillDisabled}
         hidden={!visibility.randomFill}
         sx={absoluteAt(x, positions.randomFill)}
       >
@@ -491,12 +492,14 @@ export interface OpponentDeckControlsProps {
   onShuffleOpponentDeck: () => void;
   onClearOpponentDeck: () => void;
   onRandomFillOpponentDeck: () => void;
+  /** True when the opponent deck is full or no character is left to fill it with. */
+  randomFillDisabled: boolean;
 }
 
 export function OpponentDeckControls({
   layout, judge, isMelee, isCPU, is1v1, isSelectingCards, cpuOpponentSetting,
   onCpuOpponentSettingChange, onToggleTraditionalMode, onShuffleOpponentDeck,
-  onClearOpponentDeck, onRandomFillOpponentDeck,
+  onClearOpponentDeck, onRandomFillOpponentDeck, randomFillDisabled,
 }: OpponentDeckControlsProps) {
   const rightX = layout.deckRight + layout.canvasMargin;
   const leftX = layout.deckLeft - layout.canvasMargin;
@@ -674,7 +677,7 @@ export function OpponentDeckControls({
 
       <GameButton
         key="random-fill-opponent-deck-button"
-        disabled={cpuDeckActionsDisabled || judge.isDeckFull(1)}
+        disabled={cpuDeckActionsDisabled || randomFillDisabled}
         hidden={cpuDeckActionsHidden}
         text={GetLocalizedString(Localization.GameRandomFill)}
         onClick={onRandomFillOpponentDeck}

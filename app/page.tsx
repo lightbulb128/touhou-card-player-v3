@@ -12,7 +12,7 @@ import GameTab from "./components/GameTab";
 import ConfigTab from "./components/ConfigTab";
 import { GetLocalizedString, Localization } from "./types/Localization";
 import { PagePRNG } from "./types/PagePrng";
-import { useIsSmallScreen } from "./lib/useWindowWidth";
+import { useCanPlayGame, useIsSmallScreen } from "./lib/useWindowWidth";
 import { useGameData } from "./lib/useGameData";
 import { useMusicPlayer } from "./lib/useMusicPlayer";
 import { playbackToggleAction } from "./lib/playbackActions";
@@ -115,6 +115,7 @@ export default function Home() {
   });
 
   const isOnSmallerScreen = useIsSmallScreen();
+  const canPlayGame = useCanPlayGame();
 
   // `[` / `]` / space drive the transport, but only where the transport is on screen: the
   // Player and List tabs, and never while a match owns the music.
@@ -145,10 +146,10 @@ export default function Home() {
 
   // A PvP join link (`?code=…&role=client|observer`) opens the game board so the recipient lands
   // on the join panel. Applied after mount, not in the initial state, to keep the server-rendered
-  // markup identical to the first client render. Small screens have no game mode at all, so the
-  // link is ignored there rather than revealing a tab the header deliberately hides.
+  // markup identical to the first client render. Phones and narrow windows have no game board at
+  // all, so the link is ignored there rather than revealing a tab the header deliberately hides.
   useEffect(() => {
-    if (isOnSmallerScreen) { return; }
+    if (!canPlayGame) { return; }
     if (resolveJoinLink(getFeatures().code, getFeatures().role) !== null) {
       setActiveTab(GameTabIndex);
     }
@@ -222,8 +223,8 @@ export default function Home() {
               disabled={player.inGame}
               onClick={() => { setActiveTab(ConfigTabIndex); }}
             />
-            {!isOnSmallerScreen && <Divider orientation="vertical" flexItem />}
-            {!isOnSmallerScreen && (
+            {canPlayGame && <Divider orientation="vertical" flexItem />}
+            {canPlayGame && (
               <TabButton
                 label={GetLocalizedString(Localization.TabNameAbout)}
                 selected={activeTab === GameTabIndex}

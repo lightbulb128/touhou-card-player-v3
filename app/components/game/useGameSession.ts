@@ -16,7 +16,7 @@ import { loadPlayerName, savePlayerName } from "../../lib/persistence";
 import { getFeatures } from "../../lib/features";
 import { buildJoinUrl, resolveJoinLink } from "../../lib/joinLink";
 import type { JoinRole } from "../../lib/joinLink";
-import { useIsSmallScreen } from "../../lib/useWindowWidth";
+import { useCanPlayGame } from "../../lib/useWindowWidth";
 import { enableCheat, isCheatString } from "../../types/Cheat";
 import { useVersion } from "../../lib/useVersion";
 import { GetLocalizedString, Localization } from "../../types/Localization";
@@ -34,6 +34,7 @@ import type {
 } from "./gameButtonModels";
 import { useBoardSetting } from "./useBoardSetting";
 import { useUnusedCards } from "./useUnusedCards";
+import { localWaitingRoster } from "./localRoster";
 import type { DragInfo } from "./cardDrag";
 
 /**
@@ -93,6 +94,12 @@ export type GameSession = {
   localDeckIndex: number;
   /** Whether the music is already narrowed down to the cards in play. */
   isMusicFilteredByDeck: boolean;
+  /**
+   * Whether the deck's Random Fill would place nothing: the deck is full or every character is
+   * already on a board pile. Derived from the live selection, not the judge's mirrored ref.
+   */
+  randomFillDisabled: boolean;
+  opponentRandomFillDisabled: boolean;
   timerRef: RefObject<GameTimerDisplayHandle | null>;
   isSelectingCards: boolean;
   isCPU: boolean;
@@ -286,24 +293,25 @@ export function useGameSession(props: GameSessionProps): GameSession {
   const disconnectWebRTCIfAny = useCallback(() => { peer.disconnect(); }, [peer]);
 
   const resetOpponentDeck = useCallback(() => {
-    // Capture the local name before the player array is rebuilt around slot 0.
-    const selfName = judge.players[judge.myPlayerIndex]?.name ?? "";
-    judge.players = [judge.players[0]];
-    judge.players[0].name = selfName;
-
-    if (judge.matchType === MatchType.CPU) {
-      judge.addCPUPlayer();
-    }
-    judge.myPlayerIndex = 0;
     if (judge.matchType === MatchType.Client || judge.matchType === MatchType.Observer) {
-      judge.players[0].deck = [];
-      for (let index = 0; index < judge.deckRows * judge.deckColumns; index++) {
-        judge.players[0].deck.push(new CardInfo(null, 0));
-      }
-      judge.addPlayer(selfName, judge.matchType === MatchType.Client);
-      judge.players[1].isObserver = false;
-      judge.myPlayerIndex = 1;
+      const waiting = localWaitingRoster({
+        players: judge.players,
+        myPlayerIndex: judge.myPlayerIndex,
+        fillLocalDeck: judge.matchType === MatchType.Client,
+        deckSize: judge.deckRows * judge.deckColumns,
+      });
+      judge.players = waiting.players;
+      judge.myPlayerIndex = waiting.myPlayerIndex;
       judge.resetNonServerState();
+    } else {
+      // Capture the local name before the player array is rebuilt around slot 0.
+      const selfName = judge.players[judge.myPlayerIndex]?.name ?? "";
+      judge.players = [judge.players[0]];
+      judge.players[0].name = selfName;
+      judge.myPlayerIndex = 0;
+      if (judge.matchType === MatchType.CPU) {
+        judge.addCPUPlayer();
+      }
     }
     markJudgeChanged();
   }, [judge, markJudgeChanged]);
@@ -356,20 +364,19 @@ export function useGameSession(props: GameSessionProps): GameSession {
     notifyGameEnd();
     addSystemChatMessage(GetLocalizedString(Localization.ChatMessageServerDisconnected));
     if (judge.isClient() || judge.isObserver()) {
-      if (judge.players.length > 2) {
-        judge.players = [judge.players[0], judge.players[1]];
-      }
-      if (judge.players.length === 1) {
-        judge.addPlayer();
-      }
-      judge.myPlayerIndex = 1;
+      // Rebuild around the local seat: the old slot 1 may belong to another client, and taking
+      // its name would make the local player announce a departed player's name on reconnect.
+      resetOpponentDeck();
     } else {
       judge.players = [judge.players[0]];
       judge.myPlayerIndex = 0;
+      judge.resetNonServerState();
     }
-    judge.resetNonServerState();
     markJudgeChanged();
-  }, [judge, markJudgeChanged, notifyGameEnd, addSystemChatMessage, clearBoardInteraction]);
+  }, [
+    judge, resetOpponentDeck, markJudgeChanged, notifyGameEnd, addSystemChatMessage,
+    clearBoardInteraction,
+  ]);
 
   const handleClientConnected = useCallback((id: number) => {
     if (judge.players.length > id) {
@@ -621,12 +628,12 @@ export function useGameSession(props: GameSessionProps): GameSession {
 
   // A `?code=…&role=client|observer` deep link switches straight into the matching remote role and
   // prefills the share code, so the recipient only has to press connect. Runs once: the role is a
-  // starting point, not a lock, so the user can still switch before joining. Skipped on small
-  // screens, where the game board is banned outright and creating a peer would be a pure side
-  // effect on a page the user cannot reach.
-  const isOnSmallerScreen = useIsSmallScreen();
+  // starting point, not a lock, so the user can still switch before joining. Skipped on phones and
+  // narrow windows, where the game board is banned outright and creating a peer would be a pure
+  // side effect on a page the user cannot reach.
+  const canPlayGame = useCanPlayGame();
   useEffect(() => {
-    if (isOnSmallerScreen) { return; }
+    if (!canPlayGame) { return; }
     const features = getFeatures();
     const prefill = resolveJoinLink(features.code, features.role);
     if (prefill === null) { return; }
@@ -969,6 +976,8 @@ export function useGameSession(props: GameSessionProps): GameSession {
     setHoveringCardInfo,
     localDeckIndex,
     isMusicFilteredByDeck,
+    randomFillDisabled: !judge.canRandomFill(localDeckIndex, musicSelection),
+    opponentRandomFillDisabled: !judge.canRandomFill(1, musicSelection),
     timerRef,
     isSelectingCards,
     isCPU,

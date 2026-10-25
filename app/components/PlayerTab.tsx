@@ -290,6 +290,8 @@ export default function PlayerTab({
                 });
               }}
             >{GetLocalizedString(Localization.PlayerTabCountdown)}</Button>
+          </Stack>
+          <Stack direction="row" spacing={1} width="100%" alignItems="center" justifyContent="center">
             <Button
               variant={displayHidden ? "contained" : "outlined"}
               sx={{ width: "8rem", fontFamily: NoFontFamily }}

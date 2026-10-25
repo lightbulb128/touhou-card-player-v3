@@ -219,43 +219,82 @@ class GameJudge {
     }
   }
 
+  /**
+   * The characters a random fill may still put on a deck: every character the board offers while
+   * the lineup is being built (soundtrack not disabled), minus the ones already sitting in a deck
+   * or a collected pile, because a character may appear only once across the two decks.
+   *
+   * The playing order is deliberately not the source: it is a snapshot that goes stale (restored
+   * storage, characters added to the dataset since), while the selectable row under the board
+   * always offers the live set - and starting a match rebuilds the order from the character list
+   * anyway, so a stale order would only make Random Fill refuse cards the board happily accepts.
+   */
+  selectableCharactersForFill(
+    musicSelection: MusicSelectionMap = this.g().musicSelection,
+  ): Set<CharacterId> {
+    const selectable = new Set<CharacterId>();
+    this.g().globalData.characterConfigs.forEach((config, characterId) => {
+      if (musicSelection.get(characterId) === -1) { return; }
+      if (config.card.length === 0) { return; }
+      selectable.add(characterId);
+    });
+    for (const player of this.players) {
+      for (const cardInfo of player.deck) {
+        if (cardInfo.characterId !== null) { selectable.delete(cardInfo.characterId); }
+      }
+      for (const cardInfo of player.collected) {
+        if (cardInfo.characterId !== null) { selectable.delete(cardInfo.characterId); }
+      }
+    }
+    return selectable;
+  }
+
+  /** Whether Random Fill could still place a card on this deck. */
+  canRandomFill(
+    player: Player, musicSelection: MusicSelectionMap = this.g().musicSelection,
+  ): boolean {
+    if (player < 0 || player >= 2 || player >= this.players.length) { return false; }
+    if (this.isDeckFull(player)) { return false; }
+    return this.selectableCharactersForFill(musicSelection).size > 0;
+  }
+
   randomFillDeck(player: Player, sendOpt: SendOption): void {
 
-    if (player < 0 || player >= 2) {
+    if (player < 0 || player >= 2 || player >= this.players.length) {
       console.warn(`[GameJudge.randomFillDeck] Invalid player index: ${player}`);
       return;
     }
 
-    const selectableCharacters = new Set<CharacterId>();
-    this.playingOrder().forEach((characterId) => {
-      selectableCharacters.add(characterId);
-    });
-    // remove characters that are already in deck
-    for (const player of this.players) {
-      const deck = player.deck;
-      deck.forEach((cardInfo, _index) => {
-        if (cardInfo.characterId !== null) {
-          selectableCharacters.delete(cardInfo.characterId);
-        }
-      });
-    }
-    
+    const selectableCharacters = this.selectableCharactersForFill();
+
     // fill in every card
     for (let i = 0; i < this.players[player].deck.length; i++) {
-      if (this.players[player].deck[i].characterId === null) {
-        const selectableArray = Array.from(selectableCharacters);
-        if (selectableArray.length === 0) {
-          break;
-        }
-        const randomIndex = Math.floor(Math.random() * selectableArray.length);
-        const characterId = selectableArray[randomIndex];
-        const cardCount = this.g().globalData.characterConfigs.get(characterId)?.card.length || 1;
-        const cardId = Math.floor(Math.random() * cardCount);
-        selectableCharacters.delete(characterId);
-        this.addToDeck(player, new CardInfo(characterId, cardId), i, sendOpt);
-      }
+      if (this.players[player].deck[i].characterId !== null) { continue; }
+      if (!this.fillDeckSlot(player, i, selectableCharacters, sendOpt)) { break; }
     }
 
+  }
+
+  /**
+   * Puts one card of a not-yet-used character into `index`. A character the rules refuse costs
+   * only itself, never the slot: the next candidate is tried, so a stray rejection cannot leave a
+   * hole while other characters are still selectable.
+   */
+  fillDeckSlot(
+    player: Player, index: number, selectableCharacters: Set<CharacterId>, sendOpt: SendOption,
+  ): boolean {
+    while (selectableCharacters.size > 0) {
+      const selectableArray = Array.from(selectableCharacters);
+      const characterId = selectableArray[Math.floor(Math.random() * selectableArray.length)];
+      selectableCharacters.delete(characterId);
+      const cardCount = this.g().globalData.characterConfigs.get(characterId)?.card.length ?? 0;
+      if (cardCount === 0) { continue; }
+      const cardId = Math.floor(Math.random() * cardCount);
+      if (this.addToDeck(player, new CardInfo(characterId, cardId), index, sendOpt)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   clearDeck(player: Player, sendOpt: SendOption): boolean {

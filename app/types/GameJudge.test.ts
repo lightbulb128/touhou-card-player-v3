@@ -167,7 +167,7 @@ describe("GameJudge deck operations", () => {
     expect(judge.players[0].deck).toHaveLength(24);
   });
 
-  it("randomFillDeck fills empty slots with unique characters from the playing order", () => {
+  it("randomFillDeck fills empty slots with unique characters", () => {
     const globalData = createTestGlobalData();
     const playingOrder = ["alice", "marisa", "reimu", "youmu"];
     const { judge } = newJudge({ globalData, playingOrder });
@@ -185,6 +185,36 @@ describe("GameJudge deck operations", () => {
     }
   });
 
+  it("randomFillDeck does not restrict itself to a stale playing order", () => {
+    // the board offers every character in the selecting phase, and starting a match rebuilds the
+    // order anyway, so a short/stale order must not shrink what Random Fill can place
+    const { judge } = newJudge({ playingOrder: ["alice"] });
+
+    judge.randomFillDeck(0, DontSend);
+
+    const characterIds = new Set(
+      judge.players[0].deck.filter((card) => card.characterId !== null).map((card) => card.characterId),
+    );
+    expect(characterIds.size).toBe(4);
+    expect(characterIds.has("marisa")).toBe(true);
+  });
+
+  it("randomFillDeck skips characters whose soundtrack is disabled", () => {
+    const globalData = createTestGlobalData();
+    const musicSelection = new Map<string, number>([
+      ["alice", 0], ["marisa", -1], ["reimu", 0], ["youmu", -1],
+    ]);
+    const outerRef = createTestOuterRef({ globalData, musicSelection });
+    const judge = new GameJudge(outerRef);
+
+    judge.randomFillDeck(0, DontSend);
+
+    const characterIds = judge.players[0].deck
+      .filter((card) => card.characterId !== null)
+      .map((card) => card.characterId);
+    expect(new Set(characterIds)).toEqual(new Set(["alice", "reimu"]));
+  });
+
   it("randomFillDeck does not duplicate characters already in another deck", () => {
     const { judge } = newJudge();
     judge.addToDeck(0, new CardInfo("alice", 0), null, DontSend);
@@ -193,6 +223,52 @@ describe("GameJudge deck operations", () => {
 
     const aliceCards = judge.players[0].deck.filter((card) => card.characterId === "alice");
     expect(aliceCards).toHaveLength(1);
+  });
+
+  it("randomFillDeck leaves collected characters alone", () => {
+    const { judge } = newJudge();
+    judge.addPlayer("P1", true);
+    judge.players[0].collected.push(new CardInfo("alice", 0));
+
+    judge.randomFillDeck(0, DontSend);
+
+    const characterIds = judge.players[0].deck
+      .filter((card) => card.characterId !== null)
+      .map((card) => card.characterId);
+    expect(characterIds).not.toContain("alice");
+    expect(characterIds).toHaveLength(3);
+  });
+
+  it("randomFillDeck keeps filling when a candidate is refused", () => {
+    const { judge } = newJudge();
+    const addToDeck = vi.spyOn(judge, "addToDeck");
+    // refuse the very first candidate: that slot must be taken by the next one
+    addToDeck.mockReturnValueOnce(false);
+
+    judge.randomFillDeck(0, DontSend);
+
+    // one refused candidate + three placed cards, and no slot left empty needlessly
+    expect(addToDeck).toHaveBeenCalledTimes(4);
+    expect(judge.getDeckCardCount(0)).toBe(3);
+  });
+
+  it("canRandomFill stops at a full deck or an exhausted character set", () => {
+    const { judge } = newJudge();
+    expect(judge.canRandomFill(0)).toBe(true);
+
+    for (let i = 0; i < 24; i++) {
+      judge.addToDeck(0, new CardInfo(`char-${i}`, 0), null, DontSend);
+    }
+    expect(judge.isDeckFull(0)).toBe(true);
+    expect(judge.canRandomFill(0)).toBe(false);
+
+    // an empty deck whose every character is already collected has nothing left to place
+    const collected = newJudge();
+    for (const characterId of ["alice", "marisa", "reimu", "youmu"]) {
+      collected.judge.players[0].collected.push(new CardInfo(characterId, 0));
+    }
+    expect(collected.judge.canRandomFill(0)).toBe(false);
+    expect(collected.judge.canRandomFill(1)).toBe(false); // no second deck at all
   });
 
   it("adjustDeckSize grows and shrinks the deck while keeping placed cards", () => {

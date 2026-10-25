@@ -5,6 +5,8 @@ import { CustomColors } from "../../types/Consts";
 import { GetLocalizedString, Localization } from "../../types/Localization";
 import { NoFontFamily } from "../Theme";
 import type { BoardLayout } from "../../lib/geometry";
+import type { PlayerNamePlates } from "./playerNamePlates";
+import { playerNamePlateVisibility } from "./playerNamePlates";
 
 /**
  * The self/opponent name plates above the collected piles. The visibility rules differ
@@ -13,39 +15,23 @@ import type { BoardLayout } from "../../lib/geometry";
 
 export interface PlayerNameOverlayProps {
   layout: BoardLayout;
-  /** Name of the local player (empty string when the plate is hidden). */
-  selfName: string;
-  opponentName: string;
+  /** Seats drawn on the near and far sides; their names are shown when the seat holds a player. */
+  plates: PlayerNamePlates;
   /** True when a remote connection is live; observers/clients hide plates without one. */
   connectedToServer: boolean;
   isObserver: boolean;
-  isServer: boolean;
   isClient: boolean;
   isMelee: boolean;
-  /** Number of connected players including self. */
-  playerCount: number;
-  /** Whether the player at index 1 is an observer. */
-  secondPlayerIsObserver: boolean;
   isSelectingCards: boolean;
 }
 
 export function PlayerNameOverlay({
-  layout, selfName, opponentName, connectedToServer,
-  isObserver, isServer, isClient, isMelee, playerCount,
-  secondPlayerIsObserver, isSelectingCards,
+  layout, plates, connectedToServer,
+  isObserver, isClient, isMelee, isSelectingCards,
 }: PlayerNameOverlayProps) {
-  const layoutShowOpponentName = layout.showOpponentName;
-  const showPlayerName = layout.showPlayerName && !(isMelee && isObserver)
-    && !(isObserver && !connectedToServer);
-
-  // The plate only exists in a 1v1: with more active players the opponent is not a single person.
-  let showOpponent = layoutShowOpponentName && layout.is1v1;
-  if (isClient && !connectedToServer) { showOpponent = false; }
-  if (isObserver) {
-    if (!connectedToServer) { showOpponent = false; }
-    else if (secondPlayerIsObserver) { showOpponent = false; }
-  }
-  if (isServer && (playerCount < 2 || secondPlayerIsObserver)) { showOpponent = false; }
+  const { near: showPlayerName, far: showOpponent } = playerNamePlateVisibility({
+    layout, plates, connectedToServer, isClient, isObserver, isMelee,
+  });
 
   const selfX = isSelectingCards ? layout.canvasWidth - layout.deckLeft - layout.deckWidth : layout.canvasMargin;
   const opponentX = isSelectingCards ? layout.deckLeft : layout.canvasMargin;
@@ -68,7 +54,7 @@ export function PlayerNameOverlay({
           color: isObserver ? CustomColors.opponentColor : CustomColors.selfColor,
         }}
       >
-        {GetLocalizedString(Localization.GamePlayer)} {showPlayerName ? selfName : ""}
+        {GetLocalizedString(Localization.GamePlayer)} {showPlayerName ? plates.near.name : ""}
       </Typography>
       <Typography
         key="opponent-name-text"
@@ -85,7 +71,7 @@ export function PlayerNameOverlay({
         }}
       >
         {isObserver ? GetLocalizedString(Localization.GamePlayer) : GetLocalizedString(Localization.GameOpponent)}{" "}
-        {showOpponent ? opponentName : ""}
+        {showOpponent ? plates.far.name : ""}
       </Typography>
     </>
   );
